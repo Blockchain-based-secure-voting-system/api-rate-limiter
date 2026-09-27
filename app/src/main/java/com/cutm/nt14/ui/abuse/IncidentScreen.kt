@@ -12,7 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,20 +50,20 @@ fun IncidentScreen(
                             text = "SECURITY CENTER",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleRed,
+                            color = PolyDanger,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "Threat Incidents",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
                     GlassBadge(
-                        text = if (ddosIncidents.isEmpty() && abuseEvents.isEmpty()) "ALL SECURE" else "THREATS ACTIVE",
-                        color = if (ddosIncidents.isEmpty() && abuseEvents.isEmpty()) AppleGreen else AppleRed
+                        text = if (ddosIncidents.isEmpty() && abuseEvents.isEmpty()) "ALL SECURE" else "THREATS DETECTED",
+                        color = if (ddosIncidents.isEmpty() && abuseEvents.isEmpty()) PolySuccess else PolyDanger
                     )
                 }
             }
@@ -81,8 +80,8 @@ fun IncidentScreen(
                     Text(
                         text = "LIVE DDOS SPIKE DETECTIONS (${ddosIncidents.size})",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
                 }
@@ -91,24 +90,22 @@ fun IncidentScreen(
                     item {
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceLight
+                            backgroundColor = Color.White.copy(alpha = 0.85f),
+                            elevation = 1.dp
                         ) {
                             Text(
                                 text = "No active DDoS attacks detected across gateway endpoints.",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = PolyTextSecondary,
                                 fontSize = 13.sp
                             )
                         }
                     }
                 } else {
                     items(ddosIncidents) { incident ->
-                        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(incident.startTime))
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceDark,
-                            borderBrush = Brush.horizontalGradient(
-                                listOf(AppleRed.copy(alpha = 0.5f), Color.White.copy(alpha = 0.05f))
-                            )
+                            backgroundColor = Color.White.copy(alpha = 0.92f),
+                            elevation = 2.dp
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -120,13 +117,13 @@ fun IncidentScreen(
                                         Icon(
                                             imageVector = Icons.Default.Warning,
                                             contentDescription = null,
-                                            tint = AppleRed,
+                                            tint = PolyDanger,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = "DDoS: ${incident.endpointId}",
-                                            color = Color.White,
+                                            color = PolyTextPrimary,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp
                                         )
@@ -134,19 +131,19 @@ fun IncidentScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = "Spike: ${incident.requestSpike} reqs • Severity: ${incident.severity}",
-                                        color = Color.White.copy(alpha = 0.7f),
+                                        color = PolyTextSecondary,
                                         fontSize = 13.sp
                                     )
                                 }
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(AppleRed.copy(alpha = 0.2f))
+                                        .background(PolyDangerBg)
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = incident.status,
-                                        color = AppleRed,
+                                        color = PolyDanger,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp
                                     )
@@ -162,8 +159,8 @@ fun IncidentScreen(
                     Text(
                         text = "ABUSE & IP BLOCK LOGS (${abuseEvents.size})",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
                 }
@@ -172,11 +169,12 @@ fun IncidentScreen(
                     item {
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceLight
+                            backgroundColor = Color.White.copy(alpha = 0.85f),
+                            elevation = 1.dp
                         ) {
                             Text(
                                 text = "Zero rate limit breaches or abusive IPs reported.",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = PolyTextSecondary,
                                 fontSize = 13.sp
                             )
                         }
@@ -186,10 +184,8 @@ fun IncidentScreen(
                         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(event.createdAt))
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceDark,
-                            borderBrush = Brush.horizontalGradient(
-                                listOf(AppleOrange.copy(alpha = 0.4f), Color.White.copy(alpha = 0.05f))
-                            )
+                            backgroundColor = Color.White.copy(alpha = 0.92f),
+                            elevation = 2.dp
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -199,14 +195,14 @@ fun IncidentScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = event.eventType,
-                                        color = Color.White,
+                                        color = PolyTextPrimary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "Risk: ${event.riskScore}/100 • Action: ${event.action} • $timeStr",
-                                        color = Color.White.copy(alpha = 0.65f),
+                                        color = PolyTextSecondary,
                                         fontSize = 12.sp
                                     )
                                 }
@@ -214,13 +210,13 @@ fun IncidentScreen(
                                 if (isAdmin) {
                                     GlassButton(
                                         text = "Blacklist",
-                                        accentColor = AppleRed,
+                                        accentColor = PolyDanger,
                                         onClick = { ipToBlacklist = "IP from ${event.logId}" }
                                     )
                                 } else {
                                     Text(
                                         text = event.action,
-                                        color = AppleOrange,
+                                        color = PolyWarning,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 12.sp
                                     )
@@ -231,7 +227,7 @@ fun IncidentScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    Spacer(modifier = Modifier.height(84.dp))
                 }
             }
         }
@@ -239,25 +235,25 @@ fun IncidentScreen(
         ipToBlacklist?.let { ip ->
             AlertDialog(
                 onDismissRequest = { ipToBlacklist = null },
-                containerColor = Color(0xFF161A28),
-                title = { Text("Blacklist IP Address", color = Color.White, fontWeight = FontWeight.Bold) },
+                containerColor = Color.White,
+                title = { Text("Blacklist IP Address", color = PolyTextPrimary, fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
                         "Are you sure you want to permanently blacklist $ip on the gateway?",
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = PolyTextSecondary
                     )
                 },
                 confirmButton = {
                     Button(
                         onClick = { ipToBlacklist = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppleRed)
+                        colors = ButtonDefaults.buttonColors(containerColor = PolyDanger)
                     ) {
-                        Text("Confirm Blacklist", color = Color.White)
+                        Text("Confirm Blacklist", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { ipToBlacklist = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        Text("Cancel", color = PolyTextSecondary)
                     }
                 }
             )

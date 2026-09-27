@@ -17,7 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,14 +55,14 @@ fun EndpointScreen(
                             text = "ROUTING GATEWAY",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleCyan,
+                            color = PolyPrimary,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "API Endpoints",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
@@ -70,8 +70,9 @@ fun EndpointScreen(
                         IconButton(
                             onClick = { showAddDialog = true },
                             modifier = Modifier
+                                .shadow(2.dp, CircleShape, ambientColor = Color(0x10000000))
                                 .clip(CircleShape)
-                                .background(AppleBlue)
+                                .background(PolyPrimary)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
@@ -100,32 +101,30 @@ fun EndpointScreen(
                         Text(
                             text = "${endpoints.size} REGISTERED GATEWAY ROUTES",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold,
+                            color = PolyTextSecondary,
                             letterSpacing = 1.sp
                         )
                         GlassBadge(
                             text = if (isAdmin) "ADMIN ACCESS" else "VIEWER MODE",
-                            color = if (isAdmin) ApplePurple else AppleCyan
+                            color = if (isAdmin) PolyPurple else PolyPrimary
                         )
                     }
                 }
 
                 items(endpoints) { endpoint ->
-                    val methodColor = when (endpoint.method.uppercase()) {
-                        "GET" -> AppleGreen
-                        "POST" -> AppleBlue
-                        "PUT" -> AppleOrange
-                        "DELETE" -> AppleRed
-                        else -> AppleCyan
+                    val (methodColor, methodBg) = when (endpoint.method.uppercase()) {
+                        "GET" -> PolySuccess to PolySuccessBg
+                        "POST" -> PolyPrimary to PolyPrimaryLight
+                        "PUT" -> PolyWarning to PolyWarningBg
+                        "DELETE" -> PolyDanger to PolyDangerBg
+                        else -> PolyCyan to Color(0xFFF0F9FF)
                     }
 
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = GlassSurfaceDark,
-                        borderBrush = Brush.horizontalGradient(
-                            listOf(methodColor.copy(alpha = 0.35f), Color.White.copy(alpha = 0.05f))
-                        )
+                        backgroundColor = Color.White.copy(alpha = 0.90f),
+                        elevation = 2.dp
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -137,7 +136,8 @@ fun EndpointScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(methodColor.copy(alpha = 0.2f))
+                                            .background(methodBg)
+                                            .border(BorderStroke(1.dp, methodColor.copy(alpha = 0.35f)), RoundedCornerShape(6.dp))
                                             .padding(horizontal = 8.dp, vertical = 2.dp)
                                     ) {
                                         Text(
@@ -150,7 +150,7 @@ fun EndpointScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = endpoint.name,
-                                        color = Color.White,
+                                        color = PolyTextPrimary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp
                                     )
@@ -158,14 +158,14 @@ fun EndpointScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = endpoint.baseUrl,
-                                    color = Color.White.copy(alpha = 0.7f),
+                                    color = PolyTextSecondary,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Status: ${endpoint.status} • Owner: ${endpoint.ownerEmail}",
-                                    color = Color.White.copy(alpha = 0.4f),
+                                    color = PolyTextMuted,
                                     fontSize = 11.sp
                                 )
                             }
@@ -175,12 +175,12 @@ fun EndpointScreen(
                                     onClick = { endpointToDelete = endpoint },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(GlassSurfaceLight)
+                                        .background(PolyDangerBg)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete",
-                                        tint = AppleRed,
+                                        tint = PolyDanger,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -190,13 +190,13 @@ fun EndpointScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    Spacer(modifier = Modifier.height(84.dp))
                 }
             }
         }
 
         if (showAddDialog) {
-            AddEndpointGlassDialog(
+            AddEndpointWhiteDialog(
                 onDismiss = { showAddDialog = false },
                 onConfirm = { name, url, method ->
                     viewModel.addEndpoint(name, url, method)
@@ -208,12 +208,12 @@ fun EndpointScreen(
         endpointToDelete?.let { endpoint ->
             AlertDialog(
                 onDismissRequest = { endpointToDelete = null },
-                containerColor = Color(0xFF161A28),
-                title = { Text("Delete Endpoint", color = Color.White, fontWeight = FontWeight.Bold) },
+                containerColor = Color.White,
+                title = { Text("Delete Endpoint", color = PolyTextPrimary, fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
                         "Are you sure you want to remove ${endpoint.name} (${endpoint.baseUrl}) from gateway routing?",
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = PolyTextSecondary
                     )
                 },
                 confirmButton = {
@@ -222,14 +222,14 @@ fun EndpointScreen(
                             viewModel.deleteEndpoint(endpoint)
                             endpointToDelete = null
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppleRed)
+                        colors = ButtonDefaults.buttonColors(containerColor = PolyDanger)
                     ) {
-                        Text("Delete", color = Color.White)
+                        Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { endpointToDelete = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        Text("Cancel", color = PolyTextSecondary)
                     }
                 }
             )
@@ -238,7 +238,7 @@ fun EndpointScreen(
 }
 
 @Composable
-fun AddEndpointGlassDialog(
+fun AddEndpointWhiteDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, String, String) -> Unit
 ) {
@@ -248,8 +248,8 @@ fun AddEndpointGlassDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF161A28),
-        title = { Text("Add Gateway Endpoint", color = Color.White, fontWeight = FontWeight.Bold) },
+        containerColor = Color.White,
+        title = { Text("Add Gateway Route", color = PolyTextPrimary, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -258,11 +258,11 @@ fun AddEndpointGlassDialog(
                     label = { Text("Route Name (e.g. Invoices API)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppleCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedLabelColor = AppleCyan
+                        focusedTextColor = PolyTextPrimary,
+                        unfocusedTextColor = PolyTextPrimary,
+                        focusedBorderColor = PolyPrimary,
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedLabelColor = PolyPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -273,20 +273,20 @@ fun AddEndpointGlassDialog(
                     label = { Text("Path (e.g. /api/invoices)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppleCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedLabelColor = AppleCyan
+                        focusedTextColor = PolyTextPrimary,
+                        unfocusedTextColor = PolyTextPrimary,
+                        focusedBorderColor = PolyPrimary,
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedLabelColor = PolyPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Text(
                     text = "HTTP Method:",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = PolyTextSecondary,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -295,17 +295,13 @@ fun AddEndpointGlassDialog(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSel) AppleBlue else Color.White.copy(alpha = 0.08f))
-                                .border(
-                                    BorderStroke(1.dp, if (isSel) AppleCyan else Color.White.copy(alpha = 0.15f)),
-                                    RoundedCornerShape(8.dp)
-                                )
+                                .background(if (isSel) PolyPrimary else PolyPrimaryLight)
                                 .clickable { method = m }
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = m,
-                                color = if (isSel) Color.White else Color.White.copy(alpha = 0.6f),
+                                color = if (isSel) Color.White else PolyPrimaryDark,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -321,14 +317,14 @@ fun AddEndpointGlassDialog(
                         onConfirm(name.trim(), url.trim(), method)
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = AppleBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
             ) {
-                Text("Add Route", color = Color.White)
+                Text("Add Route", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = PolyTextSecondary)
             }
         }
     )

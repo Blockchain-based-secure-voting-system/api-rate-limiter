@@ -44,20 +44,20 @@ fun ReportScreen(
                             text = "ANALYTICS & AUDIT",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleCyan,
+                            color = PolyPrimary,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "Traffic Reports",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
                     GlassBadge(
                         text = "${reports.size} GENERATED",
-                        color = AppleBlue
+                        color = PolyPrimary
                     )
                 }
             }
@@ -72,7 +72,8 @@ fun ReportScreen(
                 ) {
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = GlassSurfaceLight
+                        backgroundColor = Color.White.copy(alpha = 0.85f),
+                        elevation = 1.dp
                     ) {
                         Column(
                             modifier = Modifier
@@ -83,20 +84,20 @@ fun ReportScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.4f),
+                                tint = PolyTextMuted,
                                 modifier = Modifier.size(44.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "No Reports Generated",
-                                color = Color.White,
+                                color = PolyTextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 17.sp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Traffic summaries and rate limiter tuning recommendations will be generated based on incoming live requests.",
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = PolyTextSecondary,
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -115,40 +116,41 @@ fun ReportScreen(
                         val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(report.generatedAt))
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceDark
+                            backgroundColor = Color.White.copy(alpha = 0.92f),
+                            elevation = 2.dp
                         ) {
                             Text(
                                 text = "${report.period.uppercase()} SUMMARY",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = AppleCyan,
+                                color = PolyPrimary,
                                 letterSpacing = 1.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = report.summary,
-                                color = Color.White,
+                                color = PolyTextPrimary,
                                 fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Recommendation: ${report.recommendation}",
-                                color = AppleOrange,
+                                color = PolyWarning,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.SemiBold
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Generated at $date",
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = PolyTextMuted,
                                 fontSize = 11.sp
                             )
                         }
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        Spacer(modifier = Modifier.height(84.dp))
                     }
                 }
             }

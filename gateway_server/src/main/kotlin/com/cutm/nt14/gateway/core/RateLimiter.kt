@@ -49,7 +49,12 @@ class RateLimiter {
     private val limiters = ConcurrentHashMap<String, ClientLimiterPair>()
 
     init {
-        // Default seed rules
+        // PolyLance Sovereign Protocol Rules
+        setRule(RateLimitRule(endpointId = "/api/polylance/escrows", limitPerMin = 20, burstLimit = 5, action = "BLOCK"))
+        setRule(RateLimitRule(endpointId = "/api/polylance/attestations", limitPerMin = 30, burstLimit = 8, action = "BLOCK"))
+        setRule(RateLimitRule(endpointId = "/api/polylance/talents", limitPerMin = 60, burstLimit = 15, action = "ALERT"))
+
+        // Standard Demo Rules
         setRule(RateLimitRule(endpointId = "/api/users", limitPerMin = 60, burstLimit = 15, action = "BLOCK"))
         setRule(RateLimitRule(endpointId = "/api/orders", limitPerMin = 40, burstLimit = 10, action = "BLOCK"))
         setRule(RateLimitRule(endpointId = "/api/products", limitPerMin = 100, burstLimit = 20, action = "ALERT"))

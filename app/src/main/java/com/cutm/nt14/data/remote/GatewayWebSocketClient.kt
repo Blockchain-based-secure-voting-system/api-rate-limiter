@@ -226,7 +226,7 @@ class GatewayWebSocketClient @Inject constructor(
                     ddosDao.insertIncident(incident)
 
                     showNotification(
-                        title = "🚨 Security Alert: Rate Limit Exceeded",
+                        title = "Security Alert: Rate Limit Exceeded",
                         body = "IP $ip received HTTP 429 on $endpoint ($type)"
                     )
                 }

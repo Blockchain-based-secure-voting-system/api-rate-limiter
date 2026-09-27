@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cutm.nt14.data.local.entities.RequestLog
 import com.cutm.nt14.ui.components.*
-import com.cutm.nt14.ui.dashboard.LiveLogGlassItem
+import com.cutm.nt14.ui.dashboard.WhiteLogItem
 
 @Composable
 fun LogScreen(
@@ -46,14 +46,14 @@ fun LogScreen(
                             text = "TRAFFIC MONITOR",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleCyan,
+                            color = PolyPrimary,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "Request Logs",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
@@ -62,12 +62,12 @@ fun LogScreen(
                             onClick = { viewModel.clearLogs() },
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(GlassSurfaceDark)
+                                .background(PolyDangerBg)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Clear Logs",
-                                tint = AppleRed,
+                                tint = PolyDanger,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -85,7 +85,8 @@ fun LogScreen(
                 ) {
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = GlassSurfaceLight
+                        backgroundColor = Color.White.copy(alpha = 0.85f),
+                        elevation = 1.dp
                     ) {
                         Column(
                             modifier = Modifier
@@ -96,20 +97,20 @@ fun LogScreen(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.4f),
+                                tint = PolyTextMuted,
                                 modifier = Modifier.size(44.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "No Logs Recorded",
-                                color = Color.White,
+                                color = PolyTextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 17.sp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Real-time traffic events will appear here dynamically as incoming requests hit the gateway.",
-                                color = Color.White.copy(alpha = 0.5f),
+                                color = PolyTextSecondary,
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -134,20 +135,20 @@ fun LogScreen(
                             Text(
                                 text = "${logs.size} TOTAL LOGGED REQUESTS",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Bold,
+                                color = PolyTextSecondary,
                                 letterSpacing = 1.sp
                             )
-                            GlassBadge(text = "LIVE FEED", color = AppleGreen)
+                            GlassBadge(text = "LIVE FEED", color = PolySuccess)
                         }
                     }
 
                     items(logs) { log ->
-                        LiveLogGlassItem(log)
+                        WhiteLogItem(log)
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(80.dp))
+                        Spacer(modifier = Modifier.height(84.dp))
                     }
                 }
             }

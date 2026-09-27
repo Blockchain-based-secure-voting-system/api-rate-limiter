@@ -77,7 +77,8 @@ fun BiometricLockScreen(
         ) {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                backgroundColor = Color(0xFF141829).copy(alpha = 0.82f)
+                backgroundColor = Color.White.copy(alpha = 0.94f),
+                elevation = 6.dp
             ) {
                 Column(
                     modifier = Modifier
@@ -89,14 +90,14 @@ fun BiometricLockScreen(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(AppleCyan.copy(alpha = 0.15f)),
+                            .background(PolyPrimaryLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Lock Icon",
                             modifier = Modifier.size(36.dp),
-                            tint = AppleCyan
+                            tint = PolyPrimary
                         )
                     }
 
@@ -106,7 +107,7 @@ fun BiometricLockScreen(
                         text = "NT14 LOCKED",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = AppleCyan,
+                        color = PolyPrimary,
                         letterSpacing = 2.sp
                     )
 
@@ -116,7 +117,7 @@ fun BiometricLockScreen(
                         text = "Biometric Security",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = PolyTextPrimary
                     )
 
                     if (!email.isNullOrBlank()) {
@@ -124,8 +125,8 @@ fun BiometricLockScreen(
                         Text(
                             text = "Logged in as $email",
                             fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontWeight = FontWeight.Medium
+                            color = PolyTextSecondary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
@@ -135,24 +136,25 @@ fun BiometricLockScreen(
                         text = "Device-level biometric or PIN verification required to access live gateway controls.",
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = PolyTextMuted,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
 
                     Spacer(modifier = Modifier.height(28.dp))
 
                     if (uiState is BiometricLockUiState.Prompting) {
-                        CircularProgressIndicator(color = AppleCyan)
+                        CircularProgressIndicator(color = PolyPrimary)
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
                             text = "Waiting for fingerprint / face / PIN...",
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = PolyTextSecondary,
                             fontSize = 13.sp
                         )
                     } else {
                         GlassButton(
                             text = "Unlock with Fingerprint",
-                            accentColor = AppleBlue,
+                            accentColor = PolyPrimary,
+                            isFilled = true,
                             onClick = {
                                 if (activity != null) {
                                     viewModel.authenticate(activity)
@@ -165,7 +167,8 @@ fun BiometricLockScreen(
 
                         GlassButton(
                             text = "Unlock with Device PIN / Pattern",
-                            accentColor = AppleCyan,
+                            accentColor = PolyCyan,
+                            isFilled = false,
                             onClick = {
                                 val pinIntent = viewModel.getDeviceCredentialIntent()
                                 if (pinIntent != null) {
@@ -181,7 +184,8 @@ fun BiometricLockScreen(
 
                         GlassButton(
                             text = "Sign out instead",
-                            accentColor = Color.White.copy(alpha = 0.5f),
+                            accentColor = PolyTextSecondary,
+                            isFilled = false,
                             onClick = {
                                 viewModel.signOut(onSignOut)
                             },
@@ -193,7 +197,7 @@ fun BiometricLockScreen(
                         Spacer(modifier = Modifier.height(18.dp))
                         Text(
                             text = (uiState as BiometricLockUiState.Error).message,
-                            color = AppleRed,
+                            color = PolyDanger,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 12.dp)

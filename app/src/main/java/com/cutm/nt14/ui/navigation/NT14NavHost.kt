@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -74,14 +75,13 @@ fun NT14NavHost() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .shadow(4.dp, RoundedCornerShape(30.dp), ambientColor = Color(0x14000000))
                             .clip(RoundedCornerShape(30.dp))
-                            .background(Color(0xFF101320).copy(alpha = 0.88f))
+                            .background(Color.White.copy(alpha = 0.94f))
                             .border(
                                 BorderStroke(
                                     1.dp,
-                                    Brush.verticalGradient(
-                                        listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f))
-                                    )
+                                    Color(0xFFE2E8F0)
                                 ),
                                 RoundedCornerShape(30.dp)
                             )
@@ -95,7 +95,7 @@ fun NT14NavHost() {
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(18.dp))
                                     .background(
-                                        if (selected) AppleBlue.copy(alpha = 0.28f)
+                                        if (selected) com.cutm.nt14.ui.components.PolyPrimaryLight
                                         else Color.Transparent
                                     )
                                     .clickable {
@@ -112,14 +112,14 @@ fun NT14NavHost() {
                                     Icon(
                                         imageVector = screen.icon!!,
                                         contentDescription = screen.title,
-                                        tint = if (selected) AppleCyan else Color.White.copy(alpha = 0.45f),
+                                        tint = if (selected) com.cutm.nt14.ui.components.PolyPrimary else com.cutm.nt14.ui.components.PolyTextSecondary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
                                         text = screen.title,
                                         fontSize = 10.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selected) Color.White else Color.White.copy(alpha = 0.45f)
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) com.cutm.nt14.ui.components.PolyPrimaryDark else com.cutm.nt14.ui.components.PolyTextSecondary
                                     )
                                 }
                             }

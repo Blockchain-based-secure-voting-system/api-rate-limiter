@@ -82,7 +82,7 @@ class DashboardViewModel @Inject constructor(
         wsClient.reconnectWithHost(newHost)
     }
 
-    fun fireTestRequest(endpoint: String = "/api/users") {
+    fun fireTestRequest(endpoint: String = "/api/polylance/escrows") {
         viewModelScope.launch {
             _actionMessage.value = "Sending request to $endpoint..."
             val code = wsClient.sendTestRequest(endpoint)
@@ -93,7 +93,7 @@ class DashboardViewModel @Inject constructor(
     fun simulateAttackBurst() {
         viewModelScope.launch {
             _actionMessage.value = "Blasting 18 concurrent requests to test rate limit..."
-            wsClient.sendBurstSimulation(18, "/api/users")
+            wsClient.sendBurstSimulation(18, "/api/polylance/escrows")
             _actionMessage.value = "Burst completed! Live metrics updated."
         }
     }

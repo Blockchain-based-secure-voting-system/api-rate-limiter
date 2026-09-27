@@ -45,21 +45,21 @@ object DatabaseModule {
         val now = System.currentTimeMillis()
 
         runBlocking {
-            // Seed ONLY real gateway endpoints and active rules.
+            // Seed PolyLance Sovereign Protocol endpoints and rate limit rules.
             // NO MOCK REQUEST LOGS OR INCIDENTS — all data is fed in real-time from the live Gateway WebSocket!
-            val ep1 = Endpoint("ep_users", "Users API", "/api/users", "GET", "ACTIVE", "admin@cutm.nt14.com")
-            val ep2 = Endpoint("ep_orders", "Orders API", "/api/orders", "GET", "ACTIVE", "admin@cutm.nt14.com")
-            val ep3 = Endpoint("ep_products", "Products API", "/api/products", "GET", "ACTIVE", "admin@cutm.nt14.com")
-            val ep4 = Endpoint("ep_rules", "Rules API", "/api/rules", "GET", "ACTIVE", "admin@cutm.nt14.com")
+            val ep1 = Endpoint("ep_poly_escrows", "PolyLance Escrows API", "/api/polylance/escrows", "GET", "ACTIVE", "akhil@polylance.codes")
+            val ep2 = Endpoint("ep_poly_attestations", "PolyLance Attestations API", "/api/polylance/attestations", "GET", "ACTIVE", "akhil@polylance.codes")
+            val ep3 = Endpoint("ep_poly_talents", "PolyLance Talents API", "/api/polylance/talents", "GET", "ACTIVE", "akhil@polylance.codes")
+            val ep4 = Endpoint("ep_rules", "Rate Limiter Rules API", "/api/rules", "GET", "ACTIVE", "akhil@polylance.codes")
 
             db.endpointDao().insertEndpoint(ep1)
             db.endpointDao().insertEndpoint(ep2)
             db.endpointDao().insertEndpoint(ep3)
             db.endpointDao().insertEndpoint(ep4)
 
-            val rl1 = RateLimit("rl_users", "/api/users", 10, 5, "THROTTLE", now, SyncStatus.SYNCED)
-            val rl2 = RateLimit("rl_orders", "/api/orders", 5, 3, "BLOCK", now, SyncStatus.SYNCED)
-            val rl3 = RateLimit("rl_products", "/api/products", 20, 10, "THROTTLE", now, SyncStatus.SYNCED)
+            val rl1 = RateLimit("rl_poly_escrows", "/api/polylance/escrows", 20, 5, "BLOCK", now, SyncStatus.SYNCED)
+            val rl2 = RateLimit("rl_poly_attestations", "/api/polylance/attestations", 30, 8, "BLOCK", now, SyncStatus.SYNCED)
+            val rl3 = RateLimit("rl_poly_talents", "/api/polylance/talents", 60, 15, "THROTTLE", now, SyncStatus.SYNCED)
 
             db.rateLimitDao().insertRule(rl1)
             db.rateLimitDao().insertRule(rl2)

@@ -52,25 +52,26 @@ fun LoginScreen(
         ) {
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                backgroundColor = Color(0xFF141829).copy(alpha = 0.78f)
+                backgroundColor = Color.White.copy(alpha = 0.94f),
+                elevation = 6.dp
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .padding(vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(AppleBlue.copy(alpha = 0.2f)),
+                            .background(PolyPrimaryLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Security Gateway",
-                            tint = AppleCyan,
+                            tint = PolyPrimary,
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -81,7 +82,7 @@ fun LoginScreen(
                         text = "NT14 GATEWAY",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = AppleCyan,
+                        color = PolyPrimary,
                         letterSpacing = 2.sp
                     )
 
@@ -91,7 +92,7 @@ fun LoginScreen(
                         text = "Real-Time Rate Limiter",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = PolyTextPrimary
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -99,7 +100,7 @@ fun LoginScreen(
                     Text(
                         text = "Sign in to monitor live traffic and manage gateway security policies.",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = PolyTextSecondary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
@@ -107,11 +108,12 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(28.dp))
 
                     if (uiState is LoginUiState.Loading) {
-                        CircularProgressIndicator(color = AppleCyan)
+                        CircularProgressIndicator(color = PolyPrimary)
                     } else {
                         GlassButton(
                             text = "Sign in with Google",
-                            accentColor = AppleBlue,
+                            accentColor = PolyPrimary,
+                            isFilled = true,
                             onClick = { viewModel.signIn(activity) },
                             modifier = Modifier.fillMaxWidth(0.9f)
                         )
@@ -120,7 +122,8 @@ fun LoginScreen(
 
                         GlassButton(
                             text = "Continue as Guest (Admin)",
-                            accentColor = Color.White.copy(alpha = 0.6f),
+                            accentColor = PolyTextSecondary,
+                            isFilled = false,
                             onClick = { viewModel.signInAsGuest() },
                             modifier = Modifier.fillMaxWidth(0.9f)
                         )
@@ -130,7 +133,7 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = (uiState as LoginUiState.Error).message,
-                            color = AppleRed,
+                            color = PolyDanger,
                             fontSize = 12.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 8.dp)

@@ -1,6 +1,5 @@
 package com.cutm.nt14.ui.dashboard
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -56,14 +55,14 @@ fun DashboardScreen(
                             text = "NT14 OPTIMIZER",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleCyan,
+                            color = PolyPrimary,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "Live Dashboard",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
@@ -71,16 +70,17 @@ fun DashboardScreen(
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
+                                .shadow(2.dp, CircleShape, ambientColor = Color(0x10000000))
                                 .clip(CircleShape)
-                                .background(GlassSurfaceDark)
-                                .border(BorderStroke(1.dp, GlassBorderSubtle), CircleShape)
+                                .background(Color.White)
+                                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), CircleShape)
                                 .clickable { showHostDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = "Gateway Host Settings",
-                                tint = Color.White,
+                                tint = PolyTextSecondary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -88,9 +88,10 @@ fun DashboardScreen(
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
+                                .shadow(2.dp, CircleShape, ambientColor = Color(0x10000000))
                                 .clip(CircleShape)
-                                .background(GlassSurfaceDark)
-                                .border(BorderStroke(1.dp, GlassBorderSubtle), CircleShape)
+                                .background(Color.White)
+                                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), CircleShape)
                                 .clickable {
                                     viewModel.logout()
                                     onLogout()
@@ -100,7 +101,7 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.ExitToApp,
                                 contentDescription = "Logout",
-                                tint = AppleRed,
+                                tint = PolyDanger,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -115,7 +116,7 @@ fun DashboardScreen(
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 1. Live Gateway Connection Pill
+                // 1. Live Gateway Connection Card
                 item {
                     GatewayConnectionCard(
                         connectionState = uiState.connectionState,
@@ -128,8 +129,8 @@ fun DashboardScreen(
                 if (uiState.actionMessage != null) {
                     item {
                         GlassCard(
-                            backgroundColor = Color(0xFF1E2746).copy(alpha = 0.85f),
-                            borderBrush = Brush.horizontalGradient(listOf(AppleBlue, AppleCyan))
+                            backgroundColor = PolyPrimaryLight,
+                            borderBrush = GlassBorderSubtle
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -138,14 +139,14 @@ fun DashboardScreen(
                             ) {
                                 Text(
                                     text = uiState.actionMessage!!,
-                                    color = Color.White,
+                                    color = PolyPrimaryDark,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
                                     text = "DISMISS",
-                                    color = AppleCyan,
+                                    color = PolyPrimary,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
@@ -162,8 +163,8 @@ fun DashboardScreen(
                     Text(
                         text = "LIVE GATEWAY ACTIONS",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -172,69 +173,69 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         GlassButton(
-                            text = "⚡ Test GET",
-                            accentColor = AppleBlue,
-                            onClick = { viewModel.fireTestRequest("/api/users") },
+                            text = "Test GET",
+                            accentColor = PolyPrimary,
+                            onClick = { viewModel.fireTestRequest("/api/polylance/escrows") },
                             modifier = Modifier.weight(1f)
                         )
                         GlassButton(
-                            text = "🔥 Blast (18)",
-                            accentColor = AppleOrange,
+                            text = "Simulate Burst",
+                            accentColor = PolyWarning,
                             onClick = { viewModel.simulateAttackBurst() },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1.1f)
                         )
                         GlassButton(
-                            text = "🗑️ Clear",
-                            accentColor = AppleRed,
+                            text = "Clear Logs",
+                            accentColor = PolyDanger,
                             onClick = { viewModel.clearLogs() },
-                            modifier = Modifier.weight(0.8f)
+                            modifier = Modifier.weight(0.9f)
                         )
                     }
                 }
 
-                // 4. iOS Glass Metric Cards (2x2 Grid)
+                // 4. Transparent White Metric Tiles (2x2 Grid)
                 item {
                     Text(
                         text = "REAL-TIME METRICS",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            GlassMetricTile(
+                            WhiteMetricTile(
                                 title = "Endpoints",
                                 value = uiState.endpointCount.toString(),
-                                subtitle = "Active API routes",
-                                accentColor = ApplePurple,
+                                subtitle = "Active routes",
+                                accentColor = PolyPurple,
                                 icon = Icons.Default.Place,
                                 modifier = Modifier.weight(1f)
                             )
-                            GlassMetricTile(
+                            WhiteMetricTile(
                                 title = "Total Requests",
                                 value = uiState.totalRequests.toString(),
                                 subtitle = "Processed live",
-                                accentColor = AppleCyan,
+                                accentColor = PolyCyan,
                                 icon = Icons.Default.CheckCircle,
                                 modifier = Modifier.weight(1f)
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            GlassMetricTile(
+                            WhiteMetricTile(
                                 title = "Error / Throttle",
                                 value = "%.1f%%".format(uiState.errorRate * 100),
-                                subtitle = "Rate limit breaches",
-                                accentColor = if (uiState.errorRate > 0) AppleOrange else AppleGreen,
+                                subtitle = "429 rate throttled",
+                                accentColor = if (uiState.errorRate > 0) PolyWarning else PolySuccess,
                                 icon = Icons.Default.Warning,
                                 modifier = Modifier.weight(1f)
                             )
-                            GlassMetricTile(
+                            WhiteMetricTile(
                                 title = "Active Incidents",
                                 value = uiState.activeIncidents.toString(),
                                 subtitle = if (uiState.activeIncidents > 0) "Immediate attention" else "Zero threats",
-                                accentColor = if (uiState.activeIncidents > 0) AppleRed else AppleGreen,
+                                accentColor = if (uiState.activeIncidents > 0) PolyDanger else PolySuccess,
                                 icon = Icons.Default.Notifications,
                                 modifier = Modifier.weight(1f)
                             )
@@ -254,13 +255,13 @@ fun DashboardScreen(
                         Text(
                             text = "LIVE TRAFFIC STREAM",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.5f),
+                            fontWeight = FontWeight.Bold,
+                            color = PolyTextSecondary,
                             letterSpacing = 1.sp
                         )
                         GlassBadge(
                             text = if (uiState.recentLogs.isEmpty()) "IDLE" else "REALTIME STREAM",
-                            color = if (uiState.recentLogs.isEmpty()) Color.Gray else AppleGreen
+                            color = if (uiState.recentLogs.isEmpty()) PolyTextMuted else PolySuccess
                         )
                     }
                 }
@@ -269,7 +270,7 @@ fun DashboardScreen(
                     item {
                         GlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = GlassSurfaceLight
+                            backgroundColor = Color.White.copy(alpha = 0.75f)
                         ) {
                             Column(
                                 modifier = Modifier
@@ -280,20 +281,20 @@ fun DashboardScreen(
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "No Traffic",
-                                    tint = Color.White.copy(alpha = 0.4f),
+                                    tint = PolyTextMuted,
                                     modifier = Modifier.size(36.dp)
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = "No traffic recorded yet",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontWeight = FontWeight.SemiBold,
+                                    color = PolyTextPrimary,
+                                    fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Tap '⚡ Test GET' or '🔥 Blast' above to trigger live requests!",
-                                    color = Color.White.copy(alpha = 0.45f),
+                                    text = "Tap 'Test GET' or 'Simulate Burst' above to trigger live requests.",
+                                    color = PolyTextSecondary,
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -302,19 +303,19 @@ fun DashboardScreen(
                     }
                 } else {
                     items(uiState.recentLogs) { log ->
-                        LiveLogGlassItem(log)
+                        WhiteLogItem(log)
                     }
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(80.dp)) // padding for floating glass bottom dock
+                    Spacer(modifier = Modifier.height(84.dp))
                 }
             }
         }
 
         // Host Switcher / Configuration Dialog
         if (showHostDialog) {
-            GatewayHostDialog(
+            GatewayHostWhiteDialog(
                 currentHost = uiState.connectedHost,
                 onDismiss = { showHostDialog = false },
                 onSave = { newHost ->
@@ -335,9 +336,9 @@ fun GatewayConnectionCard(
     val isConnected = connectionState == GatewayConnectionState.CONNECTED
     val isConnecting = connectionState == GatewayConnectionState.CONNECTING
     val statusColor = when {
-        isConnected -> AppleGreen
-        isConnecting -> AppleOrange
-        else -> AppleRed
+        isConnected -> PolySuccess
+        isConnecting -> PolyWarning
+        else -> PolyDanger
     }
     val statusText = when {
         isConnected -> "GATEWAY ONLINE (LIVE)"
@@ -348,10 +349,8 @@ fun GatewayConnectionCard(
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
-        backgroundColor = Color(0xFF131724).copy(alpha = 0.82f),
-        borderBrush = Brush.horizontalGradient(
-            listOf(statusColor.copy(alpha = 0.45f), Color.White.copy(alpha = 0.1f))
-        )
+        backgroundColor = Color.White.copy(alpha = 0.92f),
+        elevation = 3.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -375,13 +374,13 @@ fun GatewayConnectionCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = statusColor,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 0.6.sp
                     )
                     Text(
                         text = "ws://$connectedHost/ws/events",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontWeight = FontWeight.Medium
+                        color = PolyTextPrimary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -389,7 +388,7 @@ fun GatewayConnectionCard(
             Icon(
                 imageVector = Icons.Default.Edit,
                 contentDescription = "Edit Host",
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = PolyTextMuted,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -397,7 +396,7 @@ fun GatewayConnectionCard(
 }
 
 @Composable
-fun GlassMetricTile(
+fun WhiteMetricTile(
     title: String,
     value: String,
     subtitle: String,
@@ -406,11 +405,9 @@ fun GlassMetricTile(
     modifier: Modifier = Modifier
 ) {
     GlassCard(
-        modifier = modifier.height(130.dp),
-        backgroundColor = GlassSurfaceDark,
-        borderBrush = Brush.linearGradient(
-            listOf(accentColor.copy(alpha = 0.35f), Color.White.copy(alpha = 0.05f))
-        )
+        modifier = modifier.height(126.dp),
+        backgroundColor = Color.White.copy(alpha = 0.88f),
+        elevation = 2.dp
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -424,49 +421,56 @@ fun GlassMetricTile(
                 Text(
                     text = title.uppercase(),
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Bold,
+                    color = PolyTextSecondary,
                     letterSpacing = 0.5.sp
                 )
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = accentColor,
-                    modifier = Modifier.size(18.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             Text(
                 text = value,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = PolyTextPrimary
             )
 
             Text(
                 text = subtitle,
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.45f)
+                color = PolyTextMuted
             )
         }
     }
 }
 
 @Composable
-fun LiveLogGlassItem(log: RequestLog) {
+fun WhiteLogItem(log: RequestLog) {
     val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     val time = sdf.format(Date(log.timestamp))
     val isBlocked = log.statusCode >= 400
-    val badgeColor = if (isBlocked) AppleRed else AppleGreen
+    val badgeColor = if (isBlocked) PolyDanger else PolySuccess
+    val badgeBg = if (isBlocked) PolyDangerBg else PolySuccessBg
     val statusLabel = if (isBlocked) "${log.statusCode} BLOCKED" else "${log.statusCode} OK"
 
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        backgroundColor = GlassSurfaceDark,
-        borderBrush = Brush.horizontalGradient(
-            listOf(badgeColor.copy(alpha = 0.3f), Color.White.copy(alpha = 0.05f))
-        )
+        shape = RoundedCornerShape(14.dp),
+        backgroundColor = Color.White.copy(alpha = 0.90f),
+        elevation = 1.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -478,7 +482,8 @@ fun LiveLogGlassItem(log: RequestLog) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(badgeColor.copy(alpha = 0.18f))
+                            .background(badgeBg)
+                            .border(BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f)), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -491,8 +496,8 @@ fun LiveLogGlassItem(log: RequestLog) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = log.endpointId,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
+                        color = PolyTextPrimary,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
                 }
@@ -500,14 +505,14 @@ fun LiveLogGlassItem(log: RequestLog) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "${log.sourceIp} • ${log.latencyMs} ms",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = PolyTextSecondary,
                     fontSize = 12.sp
                 )
             }
 
             Text(
                 text = time,
-                color = Color.White.copy(alpha = 0.4f),
+                color = PolyTextMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -516,7 +521,7 @@ fun LiveLogGlassItem(log: RequestLog) {
 }
 
 @Composable
-fun GatewayHostDialog(
+fun GatewayHostWhiteDialog(
     currentHost: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
@@ -525,15 +530,15 @@ fun GatewayHostDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF161A28),
+        containerColor = Color.White,
         title = {
-            Text("Gateway Server Host", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Gateway Server Host", color = PolyTextPrimary, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Select preset or enter IP of host PC running Ktor gateway:",
-                    color = Color.White.copy(alpha = 0.7f),
+                    text = "Select preset or enter IP of host machine running Ktor gateway:",
+                    color = PolyTextSecondary,
                     fontSize = 13.sp
                 )
 
@@ -543,33 +548,33 @@ fun GatewayHostDialog(
                     label = { Text("Host:Port") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AppleCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedLabelColor = AppleCyan
+                        focusedTextColor = PolyTextPrimary,
+                        unfocusedTextColor = PolyTextPrimary,
+                        focusedBorderColor = PolyPrimary,
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedLabelColor = PolyPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Text(
                     text = "Quick Presets:",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = PolyTextSecondary,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    PresetChip("Wi-Fi (192.168.29.231)") {
+                    WhitePresetChip("Wi-Fi (192.168.29.231)") {
                         hostInput = "192.168.29.231:8000"
                     }
-                    PresetChip("ADB (127.0.0.1)") {
+                    WhitePresetChip("ADB (127.0.0.1)") {
                         hostInput = "127.0.0.1:8000"
                     }
-                    PresetChip("Emulator") {
+                    WhitePresetChip("Emulator") {
                         hostInput = "10.0.2.2:8000"
                     }
                 }
@@ -578,34 +583,34 @@ fun GatewayHostDialog(
         confirmButton = {
             Button(
                 onClick = { onSave(hostInput.trim()) },
-                colors = ButtonDefaults.buttonColors(containerColor = AppleBlue)
+                colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
             ) {
-                Text("Connect", color = Color.White)
+                Text("Connect", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = PolyTextSecondary)
             }
         }
     )
 }
 
 @Composable
-fun PresetChip(label: String, onClick: () -> Unit) {
+fun WhitePresetChip(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(8.dp))
+            .background(PolyPrimaryLight)
+            .border(BorderStroke(1.dp, PolyPrimary.copy(alpha = 0.25f)), RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Text(
             text = label,
-            color = AppleCyan,
+            color = PolyPrimaryDark,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold
         )
     }
 }

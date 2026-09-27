@@ -72,3 +72,13 @@ data class DemoProduct(val sku: String, val name: String, val price: Double)
 
 @Serializable
 data class HealthResponse(val status: String, val subscribers: Int)
+
+// PolyLance Web3 Protocol Models
+@Serializable
+data class PolyLanceEscrow(val escrowId: String, val client: String, val freelancer: String, val amountPol: Double, val status: String)
+
+@Serializable
+data class PolyLanceAttestation(val attestationId: String, val developerGithub: String, val skillAttestation: String, val soulboundTokenId: String)
+
+@Serializable
+data class PolyLanceTalent(val talentId: String, val name: String, val specialization: String, val rating: Double)

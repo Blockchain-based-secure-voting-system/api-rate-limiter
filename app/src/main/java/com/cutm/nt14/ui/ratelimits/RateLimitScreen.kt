@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,20 +50,20 @@ fun RateLimitScreen(
                             text = "TRAFFIC POLICIES",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = AppleCyan,
+                            color = PolyPrimary,
                             letterSpacing = 1.5.sp
                         )
                         Text(
                             text = "Rate Limits",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = PolyTextPrimary
                         )
                     }
 
                     GlassBadge(
                         text = if (isAdmin) "ADMIN" else "VIEWER",
-                        color = if (isAdmin) ApplePurple else AppleCyan
+                        color = if (isAdmin) PolyPurple else PolyPrimary
                     )
                 }
             }
@@ -80,21 +79,23 @@ fun RateLimitScreen(
                     Text(
                         text = "${rules.size} ACTIVE GATEWAY ALGORITHMS (TOKEN BUCKET + SLIDING WINDOW)",
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
                         letterSpacing = 0.8.sp
                     )
                 }
 
                 items(rules) { rule ->
-                    val actionColor = if (rule.action == "BLOCK") AppleRed else AppleOrange
+                    val (actionColor, actionBg) = if (rule.action == "BLOCK") {
+                        PolyDanger to PolyDangerBg
+                    } else {
+                        PolyWarning to PolyWarningBg
+                    }
 
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = GlassSurfaceDark,
-                        borderBrush = Brush.horizontalGradient(
-                            listOf(AppleCyan.copy(alpha = 0.3f), Color.White.copy(alpha = 0.05f))
-                        )
+                        backgroundColor = Color.White.copy(alpha = 0.90f),
+                        elevation = 2.dp
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -103,62 +104,70 @@ fun RateLimitScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = AppleCyan,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(PolyPrimaryLight),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = PolyPrimary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = rule.endpointId,
-                                        color = Color.White,
+                                        color = PolyTextPrimary,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                     Column {
                                         Text(
                                             text = "RATE LIMIT",
                                             fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White.copy(alpha = 0.45f)
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
                                         )
                                         Text(
                                             text = "${rule.limitPerMin} req/min",
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextPrimary
                                         )
                                     }
                                     Column {
                                         Text(
-                                            text = "BURST CAPACITY",
+                                            text = "BURST TOKENS",
                                             fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White.copy(alpha = 0.45f)
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
                                         )
                                         Text(
-                                            text = "${rule.burstLimit} tokens",
+                                            text = "${rule.burstLimit} burst",
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = AppleCyan
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyPrimary
                                         )
                                     }
                                     Column {
                                         Text(
-                                            text = "THROTTLE ACTION",
+                                            text = "ACTION",
                                             fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White.copy(alpha = 0.45f)
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
                                         )
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(actionColor.copy(alpha = 0.2f))
+                                                .background(actionBg)
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
                                             Text(
@@ -177,12 +186,12 @@ fun RateLimitScreen(
                                     onClick = { ruleToDelete = rule },
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(GlassSurfaceLight)
+                                        .background(PolyDangerBg)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete Rule",
-                                        tint = AppleRed,
+                                        tint = PolyDanger,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -192,7 +201,7 @@ fun RateLimitScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                    Spacer(modifier = Modifier.height(84.dp))
                 }
             }
         }
@@ -200,25 +209,25 @@ fun RateLimitScreen(
         ruleToDelete?.let { rule ->
             AlertDialog(
                 onDismissRequest = { ruleToDelete = null },
-                containerColor = Color(0xFF161A28),
-                title = { Text("Disable Rate Limit", color = Color.White, fontWeight = FontWeight.Bold) },
+                containerColor = Color.White,
+                title = { Text("Disable Rate Limit", color = PolyTextPrimary, fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
                         "Are you sure you want to disable rate limiting for ${rule.endpointId}?",
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = PolyTextSecondary
                     )
                 },
                 confirmButton = {
                     Button(
                         onClick = { ruleToDelete = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = AppleRed)
+                        colors = ButtonDefaults.buttonColors(containerColor = PolyDanger)
                     ) {
-                        Text("Disable", color = Color.White)
+                        Text("Disable", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { ruleToDelete = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        Text("Cancel", color = PolyTextSecondary)
                     }
                 }
             )

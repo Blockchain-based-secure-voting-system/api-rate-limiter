@@ -1,6 +1,5 @@
 package com.cutm.nt14.ui.components
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,14 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -24,128 +21,131 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// iOS Glassmorphism Palette
-val GlassBackgroundDark = Color(0xFF08090E)
-val GlassSurfaceDark = Color(0xFF141724).copy(alpha = 0.68f)
-val GlassSurfaceLight = Color(0xFF1E2235).copy(alpha = 0.45f)
-val GlassBorderGradient = Brush.linearGradient(
+// ==========================================
+// PolyLance Clean Transparent White Palette
+// ==========================================
+val PolyWhiteBg = Color(0xFFF8FAFC)
+val PolyWhiteCanvasEnd = Color(0xFFF1F5F9)
+
+// Translucent White Glass Surfaces
+val GlassSurfaceWhite = Color.White.copy(alpha = 0.82f)
+val GlassSurfaceWhiteTranslucent = Color.White.copy(alpha = 0.65f)
+val GlassSurfaceWhiteSolid = Color.White.copy(alpha = 0.95f)
+
+// Crisp Translucent White Borders
+val GlassBorderWhite = Brush.verticalGradient(
     listOf(
-        Color.White.copy(alpha = 0.28f),
-        Color.White.copy(alpha = 0.06f),
-        Color(0xFF00C6FF).copy(alpha = 0.18f)
+        Color.White,
+        Color(0xFFE2E8F0).copy(alpha = 0.85f)
     )
 )
-val GlassBorderSubtle = Brush.linearGradient(
+val GlassBorderSubtle = Brush.verticalGradient(
     listOf(
-        Color.White.copy(alpha = 0.15f),
-        Color.White.copy(alpha = 0.03f)
+        Color.White.copy(alpha = 0.9f),
+        Color(0xFFCBD5E1).copy(alpha = 0.5f)
     )
 )
 
-val AppleBlue = Color(0xFF0A84FF)
-val AppleGreen = Color(0xFF30D158)
-val AppleRed = Color(0xFFFF453A)
-val AppleOrange = Color(0xFFFF9F0A)
-val ApplePurple = Color(0xFFBF5AF2)
-val AppleCyan = Color(0xFF64D2FF)
+// PolyLance Brand Accents
+val PolyPrimary = Color(0xFF6366F1) // Indigo / Violet
+val PolyPrimaryDark = Color(0xFF4F46E5)
+val PolyPrimaryLight = Color(0xFFEEF2FF)
+val PolyPurple = Color(0xFF7C3AED) // Sovereign Purple
+val PolySuccess = Color(0xFF10B981) // Emerald Green
+val PolySuccessBg = Color(0xFFECFDF5)
+val PolyWarning = Color(0xFFF59E0B) // Amber
+val PolyWarningBg = Color(0xFFFFFBEB)
+val PolyDanger = Color(0xFFEF4444) // Red
+val PolyDangerBg = Color(0xFFFEF2F2)
+val PolyCyan = Color(0xFF0284C7)
+
+// Text Hierarchy
+val PolyTextPrimary = Color(0xFF0F172A)
+val PolyTextSecondary = Color(0xFF475569)
+val PolyTextMuted = Color(0xFF94A3B8)
+
+// Backward compatibility alias for theme
+val GlassBackgroundDark = PolyWhiteBg
+val AppleBlue = PolyPrimary
+val AppleCyan = PolyCyan
+val AppleGreen = PolySuccess
+val AppleOrange = PolyWarning
+val AppleRed = PolyDanger
+val ApplePurple = PolyPurple
 
 /**
- * Root container providing dynamic ambient glowing gradient orbs
- * behind frosted glass surfaces to create true iOS glassmorphism depth.
+ * Root clean light canvas with subtle, elegant atmospheric tints
+ * (soft PolyLance lavender & sky tones), perfect for transparent white glass surfaces.
  */
 @Composable
 fun GlassBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ambient_glow")
-    val animOffset by infiniteTransition.animateFloat(
-        initialValue = -30f,
-        targetValue = 30f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 6000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "orb_float"
-    )
-
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(GlassBackgroundDark)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFFF8FAFC),
+                        Color(0xFFF1F5F9),
+                        Color(0xFFEDE9FE).copy(alpha = 0.35f)
+                    )
+                )
+            )
     ) {
-        // Glowing Ambient Orb 1: Violet/Indigo (Top-Left)
+        // Soft ambient top-right pastel tint (PolyLance lavender)
         Box(
             modifier = Modifier
-                .size(320.dp)
-                .offset(x = (-40 + animOffset).dp, y = (-20).dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF5E17EB).copy(alpha = 0.38f),
-                            Color(0xFF3B82F6).copy(alpha = 0.20f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .blur(60.dp)
-        )
-
-        // Glowing Ambient Orb 2: Electric Cyan (Top-Right)
-        Box(
-            modifier = Modifier
-                .size(280.dp)
+                .size(340.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 60.dp, y = (100 - animOffset).dp)
+                .offset(x = 90.dp, y = (-50).dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF00F2FE).copy(alpha = 0.32f),
-                            Color(0xFF4FACFE).copy(alpha = 0.15f),
+                            Color(0xFFC7D2FE).copy(alpha = 0.35f),
+                            Color(0xFFE0E7FF).copy(alpha = 0.15f),
                             Color.Transparent
                         )
                     )
                 )
-                .blur(50.dp)
         )
 
-        // Glowing Ambient Orb 3: Coral/Rose (Bottom-Center)
+        // Soft ambient bottom-left pastel tint (PolyLance sky)
         Box(
             modifier = Modifier
-                .size(360.dp)
-                .align(Alignment.BottomCenter)
-                .offset(y = (80 + animOffset).dp)
+                .size(300.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-80).dp, y = 60.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFFF2A6D).copy(alpha = 0.22f),
-                            Color(0xFF7000FF).copy(alpha = 0.18f),
+                            Color(0xFFBAE6FD).copy(alpha = 0.30f),
                             Color.Transparent
                         )
                     )
                 )
-                .blur(70.dp)
         )
 
-        // Screen Content Layer
         content()
     }
 }
 
 /**
- * Frosted translucent glass card container with fine glowing specular border
- * and squircle rounded corners.
+ * Transparent White Frosted Glass Card with crisp white borders,
+ * soft diffused ambient elevation, and squircle rounded corners.
  */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(22.dp),
-    borderBrush: Brush = GlassBorderGradient,
+    shape: Shape = RoundedCornerShape(20.dp),
+    borderBrush: Brush = GlassBorderWhite,
     borderWidth: Dp = 1.dp,
-    backgroundColor: Color = GlassSurfaceDark,
+    backgroundColor: Color = GlassSurfaceWhite,
+    elevation: Dp = 3.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -155,6 +155,12 @@ fun GlassCard(
 
     Column(
         modifier = modifier
+            .shadow(
+                elevation = elevation,
+                shape = shape,
+                ambientColor = Color(0x0F0F172A),
+                spotColor = Color(0x140F172A)
+            )
             .clip(shape)
             .background(backgroundColor)
             .border(BorderStroke(borderWidth, borderBrush), shape)
@@ -165,43 +171,42 @@ fun GlassCard(
 }
 
 /**
- * Sleek iOS-style glass button with frosted acrylic styling and subtle glow.
+ * Clean Transparent White Button or Solid Indigo Brand Button.
  */
 @Composable
 fun GlassButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    accentColor: Color = AppleBlue,
+    accentColor: Color = PolyPrimary,
+    isFilled: Boolean = false,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(16.dp),
+    shape: Shape = RoundedCornerShape(14.dp),
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(
-                        accentColor.copy(alpha = if (enabled) 0.35f else 0.15f),
-                        accentColor.copy(alpha = if (enabled) 0.18f else 0.08f)
-                    )
-                )
-            )
+    val bgModifier = if (isFilled) {
+        Modifier.background(if (enabled) accentColor else accentColor.copy(alpha = 0.4f))
+    } else {
+        Modifier
+            .background(Color.White.copy(alpha = if (enabled) 0.90f else 0.5f))
             .border(
                 BorderStroke(
                     1.dp,
-                    Brush.linearGradient(
-                        listOf(
-                            accentColor.copy(alpha = if (enabled) 0.60f else 0.20f),
-                            Color.White.copy(alpha = 0.10f)
-                        )
-                    )
+                    if (enabled) accentColor.copy(alpha = 0.35f) else Color(0xFFE2E8F0)
                 ),
                 shape
             )
+    }
+
+    val textColor = if (isFilled) Color.White else if (enabled) accentColor else PolyTextMuted
+
+    Box(
+        modifier = modifier
+            .shadow(if (isFilled) 3.dp else 1.dp, shape, ambientColor = Color(0x080F172A))
+            .clip(shape)
+            .then(bgModifier)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 11.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -214,35 +219,35 @@ fun GlassButton(
             }
             Text(
                 text = text,
-                color = if (enabled) Color.White else Color.White.copy(alpha = 0.4f),
+                color = textColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-                letterSpacing = 0.3.sp
+                fontSize = 14.sp,
+                letterSpacing = 0.2.sp
             )
         }
     }
 }
 
 /**
- * Micro glass badge with active status dot and translucent pill border.
+ * Clean Translucent Status Pill Badge.
  */
 @Composable
 fun GlassBadge(
     text: String,
-    color: Color = AppleGreen,
+    color: Color = PolySuccess,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(color.copy(alpha = 0.15f))
-            .border(BorderStroke(1.dp, color.copy(alpha = 0.35f)), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .background(color.copy(alpha = 0.12f))
+            .border(BorderStroke(1.dp, color.copy(alpha = 0.30f)), RoundedCornerShape(20.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(6.dp)
                 .clip(CircleShape)
                 .background(color)
         )
@@ -250,8 +255,9 @@ fun GlassBadge(
         Text(
             text = text,
             color = color,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.4.sp
         )
     }
 }
