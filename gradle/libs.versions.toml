@@ -23,6 +23,7 @@ googleApiClient = "2.0.0"
 datastore = "1.1.1"
 navigation = "2.7.7"
 ksp = "2.0.20-1.0.24"
+biometric = "1.2.0-alpha05"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -79,6 +80,9 @@ google-api-client-android = { group = "com.google.api-client", name = "google-ap
 
 # DataStore
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+# Biometric
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

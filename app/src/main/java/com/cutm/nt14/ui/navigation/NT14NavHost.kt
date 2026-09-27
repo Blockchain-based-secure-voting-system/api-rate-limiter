@@ -1,35 +1,33 @@
-
-
-
 package com.cutm.nt14.ui.navigation
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.cutm.nt14.ui.login.LoginScreen
-import com.cutm.nt14.ui.login.LoginViewModel
-import com.cutm.nt14.ui.login.SplashViewModel
-import com.cutm.nt14.ui.login.SplashScreen
+import androidx.navigation.compose.rememberNavController
+import com.cutm.nt14.ui.abuse.IncidentScreen
+import com.cutm.nt14.ui.biometric.BiometricLockScreen
 import com.cutm.nt14.ui.dashboard.DashboardScreen
 import com.cutm.nt14.ui.endpoints.EndpointScreen
+import com.cutm.nt14.ui.login.LoginScreen
+import com.cutm.nt14.ui.login.LoginViewModel
+import com.cutm.nt14.ui.login.SplashScreen
+import com.cutm.nt14.ui.login.SplashViewModel
 import com.cutm.nt14.ui.logs.LogScreen
 import com.cutm.nt14.ui.ratelimits.RateLimitScreen
-import com.cutm.nt14.ui.abuse.IncidentScreen
 import com.cutm.nt14.ui.reports.ReportScreen
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
-import androidx.compose.ui.Modifier
 
 sealed class Screen(val route: String, val title: String = "", val icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
     object Splash : Screen("splash")
     object Login : Screen("login")
+    object BiometricLock : Screen("biometric_lock")
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Home)
     object Endpoints : Screen("endpoints", "Endpoints", Icons.Default.List)
     object Logs : Screen("logs", "Logs", Icons.Default.Info)
@@ -48,7 +46,9 @@ fun NT14NavHost() {
 
     Scaffold(
         bottomBar = {
-            if (currentRoute != Screen.Splash.route && currentRoute != Screen.Login.route) {
+            if (currentRoute != Screen.Splash.route && 
+                currentRoute != Screen.Login.route && 
+                currentRoute != Screen.BiometricLock.route) {
                 NavigationBar {
                     bottomNavScreens.forEach { screen ->
                         NavigationBarItem(
@@ -82,9 +82,29 @@ fun NT14NavHost() {
                             popUpTo(Screen.Splash.route) { inclusive = true }
                         }
                     },
+                    onNavigateToBiometricLock = {
+                        navController.navigate(Screen.BiometricLock.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    },
                     onNavigateToDashboard = {
                         navController.navigate(Screen.Dashboard.route) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.BiometricLock.route) {
+                BiometricLockScreen(
+                    onUnlockSuccess = {
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo(Screen.BiometricLock.route) { inclusive = true }
+                        }
+                    },
+                    onSignOut = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.BiometricLock.route) { inclusive = true }
                         }
                     }
                 )

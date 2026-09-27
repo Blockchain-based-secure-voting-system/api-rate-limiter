@@ -14,16 +14,18 @@ import androidx.compose.ui.unit.dp
 fun SplashScreen(
     viewModel: SplashViewModel,
     onNavigateToLogin: () -> Unit,
+    onNavigateToBiometricLock: () -> Unit,
     onNavigateToDashboard: () -> Unit
 ) {
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val destination by viewModel.destination.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
 
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn == true) {
-            onNavigateToDashboard()
-        } else if (isLoggedIn == false) {
-            onNavigateToLogin()
+    LaunchedEffect(destination) {
+        when (destination) {
+            is SplashDestination.Login -> onNavigateToLogin()
+            is SplashDestination.BiometricLock -> onNavigateToBiometricLock()
+            is SplashDestination.Dashboard -> onNavigateToDashboard()
+            null -> Unit
         }
     }
 
@@ -34,14 +36,16 @@ fun SplashScreen(
                 style = MaterialTheme.typography.headlineLarge
             )
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            CircularProgressIndicator()
+
             if (isOnline == false) {
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Offline. Please check your connection.",
-                    color = MaterialTheme.colorScheme.error
+                    text = "Offline Mode (Local database active)",
+                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodySmall
                 )
-            } else {
-                CircularProgressIndicator()
             }
         }
     }
