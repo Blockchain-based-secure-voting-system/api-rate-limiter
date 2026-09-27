@@ -34,6 +34,18 @@ class SessionManager @Inject constructor(
         UserRole.valueOf(roleStr)
     }
 
+    private val GATEWAY_HOST = stringPreferencesKey("gateway_host")
+
+    val gatewayHost: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[GATEWAY_HOST] ?: "192.168.29.231:8000"
+    }
+
+    suspend fun saveGatewayHost(host: String) {
+        context.dataStore.edit { prefs ->
+            prefs[GATEWAY_HOST] = host
+        }
+    }
+
     suspend fun saveSession(email: String, name: String, role: UserRole = UserRole.ADMIN) {
         context.dataStore.edit { prefs ->
             prefs[USER_EMAIL] = email

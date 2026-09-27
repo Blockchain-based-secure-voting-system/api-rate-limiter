@@ -6,6 +6,7 @@ import com.cutm.nt14.data.local.daos.RequestLogDao
 import com.cutm.nt14.data.local.entities.RequestLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -15,4 +16,10 @@ class LogViewModel @Inject constructor(
 
     val logs = logDao.getAllLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun clearLogs() {
+        viewModelScope.launch {
+            logDao.clearAllLogs()
+        }
+    }
 }

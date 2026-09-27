@@ -14,4 +14,7 @@ interface DDoSIncidentDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertIncident(incident: DDoSIncident)
+
+    @Query("DELETE FROM DDoSIncidents")
+    suspend fun clearAllIncidents()
 }

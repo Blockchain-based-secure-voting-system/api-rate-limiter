@@ -1,5 +1,6 @@
 package com.cutm.nt14.data.remote
 
+import android.app.Activity
 import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -14,22 +15,23 @@ import javax.inject.Singleton
 class GoogleAuthManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val credentialManager = CredentialManager.create(context)
+    suspend fun signIn(activity: Activity): GetCredentialResponse {
+        val credentialManager = CredentialManager.create(activity)
 
-    suspend fun signIn(): GetCredentialResponse {
         val clientId = BuildConfig.WEB_CLIENT_ID.ifBlank {
             "123456789012-dummywebclientid.apps.googleusercontent.com"
         }
+
         val googleIdOption: GetGoogleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(clientId)
-            .setAutoSelectEnabled(true)
+            .setAutoSelectEnabled(false)
             .build()
 
         val request: GetCredentialRequest = GetCredentialRequest.Builder()
             .addCredentialOption(googleIdOption)
             .build()
 
-        return credentialManager.getCredential(context, request)
+        return credentialManager.getCredential(activity, request)
     }
 }

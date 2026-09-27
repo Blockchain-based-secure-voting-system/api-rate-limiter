@@ -23,4 +23,7 @@ interface RequestLogDao {
 
     @Query("UPDATE RequestLogs SET syncStatus = 'SYNCED' WHERE logId IN (:ids)")
     suspend fun markAsSynced(ids: List<String>)
+
+    @Query("DELETE FROM RequestLogs")
+    suspend fun clearAllLogs()
 }

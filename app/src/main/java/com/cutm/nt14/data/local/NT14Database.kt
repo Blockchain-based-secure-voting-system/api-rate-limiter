@@ -15,7 +15,7 @@ import com.cutm.nt14.data.local.entities.*
         DDoSIncident::class,
         Report::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class NT14Database : RoomDatabase() {

@@ -1,5 +1,6 @@
 package com.cutm.nt14.ui.biometric
 
+import android.content.Intent
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -48,6 +49,14 @@ class BiometricLockViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun onBiometricSuccess() {
+        _uiState.value = BiometricLockUiState.Success
+    }
+
+    fun getDeviceCredentialIntent(): Intent? {
+        return biometricHelper.createDeviceCredentialIntent()
     }
 
     fun signOut(onSignedOut: () -> Unit) {

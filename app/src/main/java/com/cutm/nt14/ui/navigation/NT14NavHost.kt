@@ -1,12 +1,24 @@
 package com.cutm.nt14.ui.navigation
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +26,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.cutm.nt14.ui.abuse.IncidentScreen
 import com.cutm.nt14.ui.biometric.BiometricLockScreen
+import com.cutm.nt14.ui.components.AppleBlue
+import com.cutm.nt14.ui.components.AppleCyan
+import com.cutm.nt14.ui.components.GlassBackgroundDark
 import com.cutm.nt14.ui.dashboard.DashboardScreen
 import com.cutm.nt14.ui.endpoints.EndpointScreen
 import com.cutm.nt14.ui.login.LoginScreen
@@ -45,24 +60,70 @@ fun NT14NavHost() {
     val bottomNavScreens = listOf(Screen.Dashboard, Screen.Endpoints, Screen.Logs, Screen.RateLimits, Screen.Incidents, Screen.Reports)
 
     Scaffold(
+        containerColor = GlassBackgroundDark,
         bottomBar = {
             if (currentRoute != Screen.Splash.route && 
                 currentRoute != Screen.Login.route && 
                 currentRoute != Screen.BiometricLock.route) {
-                NavigationBar {
-                    bottomNavScreens.forEach { screen ->
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon!!, contentDescription = screen.title) },
-                            label = { Text(screen.title) },
-                            selected = currentRoute == screen.route,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(Screen.Dashboard.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(Color(0xFF101320).copy(alpha = 0.88f))
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    Brush.verticalGradient(
+                                        listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f))
+                                    )
+                                ),
+                                RoundedCornerShape(30.dp)
+                            )
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        bottomNavScreens.forEach { screen ->
+                            val selected = currentRoute == screen.route
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(
+                                        if (selected) AppleBlue.copy(alpha = 0.28f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(Screen.Dashboard.route) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = screen.icon!!,
+                                        contentDescription = screen.title,
+                                        tint = if (selected) AppleCyan else Color.White.copy(alpha = 0.45f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = screen.title,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selected) Color.White else Color.White.copy(alpha = 0.45f)
+                                    )
                                 }
                             }
-                        )
+                        }
                     }
                 }
             }

@@ -14,4 +14,7 @@ interface AbuseEventDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvent(event: AbuseEvent)
+
+    @Query("DELETE FROM AbuseEvents")
+    suspend fun clearAllEvents()
 }
