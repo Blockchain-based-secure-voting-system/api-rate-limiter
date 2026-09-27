@@ -4,6 +4,7 @@ import com.cutm.nt14.gateway.core.RateLimiter
 import com.cutm.nt14.gateway.core.WebSocketManager
 import com.cutm.nt14.gateway.models.ApiMessage
 import com.cutm.nt14.gateway.models.GatewayEvent
+import com.cutm.nt14.gateway.models.HealthResponse
 import com.cutm.nt14.gateway.routes.demoRoutes
 import com.cutm.nt14.gateway.routes.eventsWebSocket
 import com.cutm.nt14.gateway.routes.ruleRoutes
@@ -152,7 +153,7 @@ fun Application.module() {
         }
 
         get("/health") {
-            call.respond(mapOf("status" to "UP", "subscribers" to webSocketManager.activeSubscriberCount()))
+            call.respond(HealthResponse("UP", webSocketManager.activeSubscriberCount()))
         }
 
         demoRoutes()

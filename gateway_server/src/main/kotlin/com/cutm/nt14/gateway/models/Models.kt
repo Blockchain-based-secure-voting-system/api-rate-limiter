@@ -69,3 +69,6 @@ data class DemoOrder(val orderId: String, val amount: Double, val status: String
 
 @Serializable
 data class DemoProduct(val sku: String, val name: String, val price: Double)
+
+@Serializable
+data class HealthResponse(val status: String, val subscribers: Int)

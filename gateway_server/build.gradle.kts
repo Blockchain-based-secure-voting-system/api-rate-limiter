@@ -56,3 +56,8 @@ tasks.withType<JavaCompile>().configureEach {
     sourceCompatibility = "11"
     targetCompatibility = "11"
 }
+
+tasks.register<JavaExec>("runSimulate") {
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.cutm.nt14.gateway.tools.SimulateTrafficKt")
+}
