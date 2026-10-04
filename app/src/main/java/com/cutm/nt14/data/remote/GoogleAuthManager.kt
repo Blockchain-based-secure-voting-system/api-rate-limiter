@@ -19,6 +19,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.cutm.nt14.BuildConfig
 import com.cutm.nt14.data.local.SessionManager
 import com.cutm.nt14.domain.model.UserRole
+import com.cutm.nt14.security.SecurityIntegrityChecker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -40,7 +41,8 @@ data class GoogleAuthUser(
 @Singleton
 class GoogleAuthManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val securityChecker: SecurityIntegrityChecker
 ) {
     private val tag = "GoogleAuthManager"
 
@@ -91,6 +93,16 @@ class GoogleAuthManager @Inject constructor(
      * Also authenticates with Firebase Auth if token is available.
      */
     suspend fun handleGoogleSignInResult(intent: Intent?): GoogleAuthUser = withContext(Dispatchers.IO) {
+        val integrity = securityChecker.checkIntegrity()
+        if (integrity.isProxyDetected) {
+            Log.e(tag, "MitM Proxy interception detected during authentication: ${integrity.proxyIndicators.joinToString()}")
+            throw SecurityException("Security violation: Active HTTP/HTTPS proxy detected. Proxy login is strictly prohibited.")
+        }
+        if (integrity.isFridaDetected) {
+            Log.e(tag, "Runtime hooking framework detected: ${integrity.reverseEngineeringIndicators.joinToString()}")
+            throw SecurityException("Security violation: Memory hooking framework detected. Authentication aborted.")
+        }
+
         val task = GoogleSignIn.getSignedInAccountFromIntent(intent)
         try {
             val account: GoogleSignInAccount = task.getResult(ApiException::class.java)
@@ -139,6 +151,16 @@ class GoogleAuthManager @Inject constructor(
      * Modern AndroidX CredentialManager sign-in.
      */
     suspend fun signInWithCredentialManager(activity: Activity): GoogleAuthUser = withContext(Dispatchers.IO) {
+        val integrity = securityChecker.checkIntegrity()
+        if (integrity.isProxyDetected) {
+            Log.e(tag, "MitM Proxy interception detected during authentication: ${integrity.proxyIndicators.joinToString()}")
+            throw SecurityException("Security violation: Active HTTP/HTTPS proxy detected. Proxy login is strictly prohibited.")
+        }
+        if (integrity.isFridaDetected) {
+            Log.e(tag, "Runtime hooking framework detected: ${integrity.reverseEngineeringIndicators.joinToString()}")
+            throw SecurityException("Security violation: Memory hooking framework detected. Authentication aborted.")
+        }
+
         val credentialManager = CredentialManager.create(activity)
         val clientId = BuildConfig.WEB_CLIENT_ID.ifBlank {
             "123456789012-dummywebclientid.apps.googleusercontent.com"

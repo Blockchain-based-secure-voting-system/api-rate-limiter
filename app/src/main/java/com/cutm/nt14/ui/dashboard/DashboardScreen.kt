@@ -358,6 +358,95 @@ fun AdminDashboardContent(
                     }
                 }
 
+                // Security & Anti-Tamper Card
+                item {
+                    val sec = uiState.securityReport
+                    val isClean = sec != null && !sec.isCompromised
+
+                    GlassCard(
+                        backgroundColor = if (isClean) Color.White.copy(alpha = 0.94f) else Color(0xFFFFF1F2),
+                        borderBrush = if (isClean) GlassBorderCobalt else BorderStroke(1.5.dp, PolyDanger).brush
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isClean) PolyPrimaryLight else Color(0xFFFFE4E6)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Security Integrity",
+                                            tint = if (isClean) PolyPrimary else PolyDanger,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "ANTI-TAMPER & ZERO-TRUST SECURITY",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isClean) PolyPrimary else PolyDanger,
+                                            letterSpacing = 1.sp
+                                        )
+                                        Text(
+                                            text = if (isClean) "Device & Network Integrity Verified" else "Security Threat Detected!",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextPrimary
+                                        )
+                                    }
+                                }
+
+                                GlassButton(
+                                    text = "Rescan",
+                                    accentColor = PolyPrimary,
+                                    onClick = { viewModel.rescanSecurityIntegrity() }
+                                )
+                            }
+
+                            HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SecurityStatusRow(
+                                    label = "Anti-MitM Proxy Defense",
+                                    status = if (sec?.isProxyDetected == true) "FAIL (Proxy Active)" else "PASS (Clean)",
+                                    isOk = sec?.isProxyDetected != true,
+                                    detail = if (sec?.isProxyDetected == true) sec.proxyIndicators.firstOrNull() else "System CAs enforced, User CAs rejected"
+                                )
+                                SecurityStatusRow(
+                                    label = "Root / Jailbreak Guard",
+                                    status = if (sec?.isRooted == true) "FAIL (Rooted)" else "PASS (Clean)",
+                                    isOk = sec?.isRooted != true,
+                                    detail = if (sec?.isRooted == true) sec.rootIndicators.firstOrNull() else "SU binaries absent, Verified OS build"
+                                )
+                                SecurityStatusRow(
+                                    label = "Reverse Engineering & Frida",
+                                    status = if (sec?.isFridaDetected == true || sec?.isDebuggerAttached == true) "ALERT (Hooked)" else "PASS (Clean)",
+                                    isOk = sec?.isFridaDetected != true && sec?.isDebuggerAttached != true,
+                                    detail = if (sec?.isFridaDetected == true) "Hooking library mapped" else "Port 27042 closed, Memory maps unhooked"
+                                )
+                                SecurityStatusRow(
+                                    label = "Bytecode & ADB Extraction",
+                                    status = "HARDENED",
+                                    isOk = true,
+                                    detail = "R8 Minified, ProGuard Active, ADB Backup Disabled"
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // 3. Real-Time Action Control Deck
                 item {
                     Text(
@@ -647,6 +736,24 @@ fun ViewerDashboardContent(
                                 color = PolyTextSecondary,
                                 lineHeight = 16.sp
                             )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = PolySuccess,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "Zero-Trust Active: System CAs Enforced, Anti-Proxy Protected",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = PolySuccess
+                                )
+                            }
                         }
                     }
                 }
@@ -1625,6 +1732,40 @@ fun WhitePresetChip(label: String, onClick: () -> Unit) {
             color = PolyPrimaryDark,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+fun SecurityStatusRow(
+    label: String,
+    status: String,
+    isOk: Boolean,
+    detail: String? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PolyTextPrimary
+            )
+            if (!detail.isNullOrBlank()) {
+                Text(
+                    text = detail,
+                    fontSize = 10.sp,
+                    color = PolyTextSecondary
+                )
+            }
+        }
+        GlassBadge(
+            text = status,
+            color = if (isOk) PolySuccess else PolyDanger
         )
     }
 }

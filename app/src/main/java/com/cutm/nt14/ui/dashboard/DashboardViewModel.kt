@@ -18,6 +18,8 @@ import com.cutm.nt14.data.remote.model.PolyLanceTalent
 import com.cutm.nt14.domain.detector.OptimizationResult
 import com.cutm.nt14.domain.detector.RateLimitOptimizer
 import com.cutm.nt14.domain.model.UserRole
+import com.cutm.nt14.security.SecurityIntegrityChecker
+import com.cutm.nt14.security.SecurityIntegrityReport
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -56,7 +58,8 @@ data class DashboardUiState(
     val actionMessage: String? = null,
     val userEmail: String? = null,
     val userName: String? = null,
-    val userRole: UserRole = UserRole.VIEWER
+    val userRole: UserRole = UserRole.VIEWER,
+    val securityReport: SecurityIntegrityReport? = null
 )
 
 @HiltViewModel
@@ -68,7 +71,8 @@ class DashboardViewModel @Inject constructor(
     private val rateLimitDao: RateLimitDao,
     private val sessionManager: SessionManager,
     private val authManager: com.cutm.nt14.data.remote.GoogleAuthManager,
-    private val wsClient: GatewayWebSocketClient
+    private val wsClient: GatewayWebSocketClient,
+    private val securityChecker: SecurityIntegrityChecker
 ) : ViewModel() {
 
     private val _actionMessage = MutableStateFlow<String?>(null)
@@ -120,13 +124,23 @@ class DashboardViewModel @Inject constructor(
             connectedHost = host,
             recentLogs = logs.take(6),
             actionMessage = msg,
-            userRole = role
+            userRole = role,
+            securityReport = securityChecker.checkIntegrity()
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DashboardUiState()
     )
+
+    fun rescanSecurityIntegrity() {
+        val report = securityChecker.checkIntegrity()
+        _actionMessage.value = if (report.isCompromised) {
+            "Security Alert: Root, Proxy or Frida detected!"
+        } else {
+            "Zero-Trust Security Scan: Verified Clean"
+        }
+    }
 
     fun toggleRole() {
         viewModelScope.launch {
