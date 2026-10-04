@@ -1,9 +1,13 @@
 package com.cutm.nt14.ui.login
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +27,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val realtimeFbUser by viewModel.realtimeFirebaseUser.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = remember(context) {
@@ -35,6 +40,17 @@ fun LoginScreen(
             c as? androidx.fragment.app.FragmentActivity
         }
         fa ?: (context as? android.app.Activity)
+    }
+
+    // Google Play Services Realtime Sign-In Launcher
+    val googleLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.handleGoogleSignInResult(result.data)
+        } else {
+            viewModel.onSignInCancelled()
+        }
     }
 
     LaunchedEffect(uiState) {
@@ -58,7 +74,7 @@ fun LoginScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 20.dp),
+                        .padding(vertical = 24.dp, horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -89,7 +105,7 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "Real-Time Rate Limiter",
+                        text = "Real-Time Google Auth",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = PolyTextPrimary
@@ -98,23 +114,50 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Sign in to monitor live traffic and manage gateway security policies.",
+                        text = "Sign in with your Google Account to access rate limiting controls and monitor traffic.",
                         fontSize = 13.sp,
                         color = PolyTextSecondary,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     )
+
+                    if (realtimeFbUser != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        GlassBadge(
+                            text = "Live Auth: ${realtimeFbUser?.email}",
+                            color = PolySuccess
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(28.dp))
 
                     if (uiState is LoginUiState.Loading) {
-                        CircularProgressIndicator(color = PolyPrimary)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = PolyPrimary,
+                            strokeWidth = 3.dp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Authenticating with Google...",
+                            fontSize = 12.sp,
+                            color = PolyTextSecondary
+                        )
                     } else {
                         GlassButton(
                             text = "Sign in with Google",
                             accentColor = PolyPrimary,
                             isFilled = true,
-                            onClick = { viewModel.signIn(activity) },
+                            onClick = {
+                                if (activity != null) {
+                                    try {
+                                        val signInIntent = viewModel.getGoogleSignInIntent(activity)
+                                        googleLauncher.launch(signInIntent)
+                                    } catch (e: Exception) {
+                                        viewModel.signInWithCredentialManager(activity)
+                                    }
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(0.9f)
                         )
 

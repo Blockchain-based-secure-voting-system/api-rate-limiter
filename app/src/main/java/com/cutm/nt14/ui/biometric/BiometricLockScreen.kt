@@ -187,7 +187,7 @@ fun BiometricLockScreen(
                             accentColor = PolyTextSecondary,
                             isFilled = false,
                             onClick = {
-                                viewModel.signOut(onSignOut)
+                                viewModel.signOut(activity, onSignOut)
                             },
                             modifier = Modifier.fillMaxWidth(0.9f)
                         )

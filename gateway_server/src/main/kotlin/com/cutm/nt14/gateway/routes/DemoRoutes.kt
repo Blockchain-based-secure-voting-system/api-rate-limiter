@@ -1,11 +1,22 @@
 package com.cutm.nt14.gateway.routes
 
+import com.cutm.nt14.gateway.core.PolyLanceUpstream
 import com.cutm.nt14.gateway.models.*
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import org.slf4j.LoggerFactory
+import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
+
+private val logger = LoggerFactory.getLogger("DemoRoutes")
+private val upstream = PolyLanceUpstream()
+private val dynamicLocalEscrows = CopyOnWriteArrayList<PolyLanceEscrow>()
 
 fun Route.demoRoutes() {
     route("/api") {
@@ -36,33 +47,69 @@ fun Route.demoRoutes() {
             call.respond(products)
         }
 
-        // PolyLance Sovereign Protocol Endpoints
+        // Real-Time PolyLance Sovereign Protocol Endpoints
         route("/polylance") {
             get("/escrows") {
-                val escrows = listOf(
-                    PolyLanceEscrow("esc_0x1a8f", "0x3F9a...b210", "0x78Ce...4a91", 450.0, "FUNDED_IN_ESCROW"),
-                    PolyLanceEscrow("esc_0x2b4c", "0x91Ad...004e", "0x53B9...1ef2", 1200.0, "MILESTONE_PENDING"),
-                    PolyLanceEscrow("esc_0x9e12", "0x22Fa...89ac", "0x67Df...55a0", 320.0, "SETTLED_RELEASED")
+                try {
+                    val liveEscrows = upstream.fetchEscrows()
+                    // Combine locally posted test escrows with live production PolyLance escrows
+                    val combined = dynamicLocalEscrows.toList() + liveEscrows
+                    call.respond(combined)
+                } catch (e: Exception) {
+                    logger.error("Failed to fetch live escrows from PolyLance upstream: ${e.message}", e)
+                    call.respond(
+                        HttpStatusCode.BadGateway,
+                        ApiMessage("PolyLance upstream error: ${e.message}")
+                    )
+                }
+            }
+
+            post("/escrows") {
+                val req = try {
+                    call.receive<CreateEscrowRequest>()
+                } catch (e: Exception) {
+                    CreateEscrowRequest()
+                }
+                val newId = "0x" + UUID.randomUUID().toString().replace("-", "").take(12)
+                val newEscrow = PolyLanceEscrow(
+                    escrowId = newId,
+                    title = "Test Escrow via NT14 Gateway",
+                    client = req.client.ifBlank { "0xb30F2eFBCEBC529d946e05C9ccE0f1ffFB7e1aB1" },
+                    freelancer = req.freelancer.ifBlank { "0xB8aa0398B91A150B041DA819bc954Bb356e009Dd" },
+                    amountPol = if (req.amountPol > 0) req.amountPol else 500.0,
+                    token = "POL",
+                    status = "Funded",
+                    contractAddress = "0x" + UUID.randomUUID().toString().replace("-", "").take(40),
+                    createdAt = System.currentTimeMillis()
                 )
-                call.respond(escrows)
+                dynamicLocalEscrows.add(0, newEscrow)
+                call.respond(HttpStatusCode.Created, newEscrow)
             }
 
             get("/attestations") {
-                val attestations = listOf(
-                    PolyLanceAttestation("att_881", "akhilmuvva", "Smart Contract Security & Polygon Architecture", "SBT_#1042"),
-                    PolyLanceAttestation("att_882", "balram-taddi", "Cross-Chain Security & Interoperability", "SBT_#1043"),
-                    PolyLanceAttestation("att_883", "sunny-pasumarthi", "Web3 UI/UX & High-Performance Frontend", "SBT_#1044")
-                )
-                call.respond(attestations)
+                try {
+                    val liveAttestations = upstream.fetchAttestations()
+                    call.respond(liveAttestations)
+                } catch (e: Exception) {
+                    logger.error("Failed to fetch live attestations from PolyLance upstream: ${e.message}", e)
+                    call.respond(
+                        HttpStatusCode.BadGateway,
+                        ApiMessage("PolyLance upstream error: ${e.message}")
+                    )
+                }
             }
 
             get("/talents") {
-                val talents = listOf(
-                    PolyLanceTalent("tal_01", "Akhil Muvva", "Protocol Architect & Solidity Lead", 5.0),
-                    PolyLanceTalent("tal_02", "Balram Taddi", "Chief Security Officer & Cryptographer", 4.9),
-                    PolyLanceTalent("tal_03", "Sunny Pasumarthi", "Lead Web3 Frontend Engineer", 4.9)
-                )
-                call.respond(talents)
+                try {
+                    val liveTalents = upstream.fetchTalents()
+                    call.respond(liveTalents)
+                } catch (e: Exception) {
+                    logger.error("Failed to fetch live talents from PolyLance upstream: ${e.message}", e)
+                    call.respond(
+                        HttpStatusCode.BadGateway,
+                        ApiMessage("PolyLance upstream error: ${e.message}")
+                    )
+                }
             }
         }
     }

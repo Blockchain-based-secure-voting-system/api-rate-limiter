@@ -20,6 +20,8 @@ class SessionManager @Inject constructor(
     private val USER_EMAIL = stringPreferencesKey("user_email")
     private val USER_NAME = stringPreferencesKey("user_name")
     private val USER_ROLE = stringPreferencesKey("user_role")
+    private val USER_PHOTO_URL = stringPreferencesKey("user_photo_url")
+    private val AUTH_PROVIDER = stringPreferencesKey("auth_provider")
 
     val userEmail: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[USER_EMAIL]
@@ -27,6 +29,14 @@ class SessionManager @Inject constructor(
 
     val userName: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[USER_NAME]
+    }
+
+    val userPhotoUrl: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[USER_PHOTO_URL]
+    }
+
+    val authProvider: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[AUTH_PROVIDER]
     }
 
     val userRole: Flow<UserRole> = context.dataStore.data.map { prefs ->
@@ -46,11 +56,23 @@ class SessionManager @Inject constructor(
         }
     }
 
-    suspend fun saveSession(email: String, name: String, role: UserRole = UserRole.ADMIN) {
+    suspend fun saveSession(
+        email: String,
+        name: String,
+        role: UserRole = UserRole.ADMIN,
+        photoUrl: String? = null,
+        provider: String = "google"
+    ) {
         context.dataStore.edit { prefs ->
             prefs[USER_EMAIL] = email
             prefs[USER_NAME] = name
             prefs[USER_ROLE] = role.name
+            if (photoUrl != null) {
+                prefs[USER_PHOTO_URL] = photoUrl
+            } else {
+                prefs.remove(USER_PHOTO_URL)
+            }
+            prefs[AUTH_PROVIDER] = provider
         }
     }
 

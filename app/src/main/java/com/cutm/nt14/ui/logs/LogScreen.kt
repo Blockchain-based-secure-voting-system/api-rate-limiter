@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cutm.nt14.data.local.entities.RequestLog
 import com.cutm.nt14.ui.components.*
-import com.cutm.nt14.ui.dashboard.WhiteLogItem
+import com.cutm.nt14.ui.dashboard.WhiteLogItemCard
 
 @Composable
 fun LogScreen(
@@ -144,7 +144,7 @@ fun LogScreen(
                     }
 
                     items(logs) { log ->
-                        WhiteLogItem(log)
+                        WhiteLogItemCard(log)
                     }
 
                     item {

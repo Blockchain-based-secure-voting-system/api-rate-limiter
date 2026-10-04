@@ -11,21 +11,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = CobaltBlue,
+    onPrimary = PureWhite,
+    primaryContainer = CobaltBlueDark,
+    onPrimaryContainer = CobaltBlueLight,
+    secondary = CobaltBlueAccent,
+    onSecondary = PureWhite,
+    background = CarbonBlack,
+    onBackground = PureWhite,
+    surface = CharcoalBlack,
+    onSurface = PureWhite
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = CobaltBlue,
+    onPrimary = PureWhite,
+    primaryContainer = CobaltBlueLight,
+    onPrimaryContainer = CobaltBlueDark,
+    secondary = SlateBlack,
+    onSecondary = PureWhite,
+    background = OffWhite,
+    onBackground = CarbonBlack,
+    surface = PureWhite,
+    onSurface = CarbonBlack
 )
 
 @Composable
 fun NT14Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

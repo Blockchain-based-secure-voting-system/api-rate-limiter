@@ -23,7 +23,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import com.cutm.nt14.data.remote.model.GatewayResponse
+import com.cutm.nt14.data.remote.model.PolyLanceAttestation
+import com.cutm.nt14.data.remote.model.PolyLanceEscrow
+import com.cutm.nt14.data.remote.model.PolyLanceTalent
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -174,6 +181,271 @@ class GatewayWebSocketClient @Inject constructor(
             }
         }
         jobs.awaitAll()
+    }
+
+    suspend fun fetchPolyLanceEscrows(): GatewayResponse<List<PolyLanceEscrow>> = withContext(Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        val host = _connectedHost.value
+        val url = "http://$host/api/polylance/escrows"
+        try {
+            val req = Request.Builder().url(url).get().build()
+            client.newCall(req).execute().use { resp ->
+                val latency = System.currentTimeMillis() - start
+                val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
+                val remaining = resp.header("X-RateLimit-Remaining")?.toIntOrNull()
+                val reset = resp.header("X-RateLimit-Reset")?.toLongOrNull()
+                val bodyStr = resp.body?.string().orEmpty()
+
+                if (resp.isSuccessful) {
+                    val list = mutableListOf<PolyLanceEscrow>()
+                    val arr = JSONArray(bodyStr)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            PolyLanceEscrow(
+                                escrowId = obj.optString("escrowId"),
+                                client = obj.optString("client"),
+                                freelancer = obj.optString("freelancer"),
+                                amountPol = obj.optDouble("amountPol", 0.0),
+                                status = obj.optString("status"),
+                                title = obj.optString("title"),
+                                token = obj.optString("token", "POL"),
+                                contractAddress = obj.optString("contractAddress")
+                            )
+                        )
+                    }
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = list,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency
+                    )
+                } else {
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = null,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency,
+                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            GatewayResponse(
+                statusCode = -1,
+                data = null,
+                rawJson = null,
+                rateLimitRemaining = null,
+                rateLimitLimit = null,
+                rateLimitReset = null,
+                latencyMs = System.currentTimeMillis() - start,
+                errorMessage = e.message ?: "Network error"
+            )
+        }
+    }
+
+    suspend fun fetchPolyLanceAttestations(): GatewayResponse<List<PolyLanceAttestation>> = withContext(Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        val host = _connectedHost.value
+        val url = "http://$host/api/polylance/attestations"
+        try {
+            val req = Request.Builder().url(url).get().build()
+            client.newCall(req).execute().use { resp ->
+                val latency = System.currentTimeMillis() - start
+                val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
+                val remaining = resp.header("X-RateLimit-Remaining")?.toIntOrNull()
+                val reset = resp.header("X-RateLimit-Reset")?.toLongOrNull()
+                val bodyStr = resp.body?.string().orEmpty()
+
+                if (resp.isSuccessful) {
+                    val list = mutableListOf<PolyLanceAttestation>()
+                    val arr = JSONArray(bodyStr)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            PolyLanceAttestation(
+                                attestationId = obj.optString("attestationId"),
+                                developerGithub = obj.optString("developerGithub"),
+                                skillAttestation = obj.optString("skillAttestation"),
+                                soulboundTokenId = obj.optString("soulboundTokenId")
+                            )
+                        )
+                    }
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = list,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency
+                    )
+                } else {
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = null,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency,
+                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            GatewayResponse(
+                statusCode = -1,
+                data = null,
+                rawJson = null,
+                rateLimitRemaining = null,
+                rateLimitLimit = null,
+                rateLimitReset = null,
+                latencyMs = System.currentTimeMillis() - start,
+                errorMessage = e.message ?: "Network error"
+            )
+        }
+    }
+
+    suspend fun fetchPolyLanceTalents(): GatewayResponse<List<PolyLanceTalent>> = withContext(Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        val host = _connectedHost.value
+        val url = "http://$host/api/polylance/talents"
+        try {
+            val req = Request.Builder().url(url).get().build()
+            client.newCall(req).execute().use { resp ->
+                val latency = System.currentTimeMillis() - start
+                val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
+                val remaining = resp.header("X-RateLimit-Remaining")?.toIntOrNull()
+                val reset = resp.header("X-RateLimit-Reset")?.toLongOrNull()
+                val bodyStr = resp.body?.string().orEmpty()
+
+                if (resp.isSuccessful) {
+                    val list = mutableListOf<PolyLanceTalent>()
+                    val arr = JSONArray(bodyStr)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            PolyLanceTalent(
+                                talentId = obj.optString("talentId"),
+                                name = obj.optString("name"),
+                                specialization = obj.optString("specialization"),
+                                rating = obj.optDouble("rating", 5.0)
+                            )
+                        )
+                    }
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = list,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency
+                    )
+                } else {
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = null,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency,
+                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            GatewayResponse(
+                statusCode = -1,
+                data = null,
+                rawJson = null,
+                rateLimitRemaining = null,
+                rateLimitLimit = null,
+                rateLimitReset = null,
+                latencyMs = System.currentTimeMillis() - start,
+                errorMessage = e.message ?: "Network error"
+            )
+        }
+    }
+
+    suspend fun createPolyLanceEscrow(
+        clientAddr: String = "0x3F9a...b210",
+        freelancerAddr: String = "0x78Ce...4a91",
+        amountPol: Double = 500.0
+    ): GatewayResponse<PolyLanceEscrow> = withContext(Dispatchers.IO) {
+        val start = System.currentTimeMillis()
+        val host = _connectedHost.value
+        val url = "http://$host/api/polylance/escrows"
+        try {
+            val jsonBody = JSONObject().apply {
+                put("client", clientAddr)
+                put("freelancer", freelancerAddr)
+                put("amountPol", amountPol)
+            }.toString()
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val body = jsonBody.toRequestBody(mediaType)
+            val req = Request.Builder().url(url).post(body).build()
+            client.newCall(req).execute().use { resp ->
+                val latency = System.currentTimeMillis() - start
+                val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
+                val remaining = resp.header("X-RateLimit-Remaining")?.toIntOrNull()
+                val reset = resp.header("X-RateLimit-Reset")?.toLongOrNull()
+                val bodyStr = resp.body?.string().orEmpty()
+
+                if (resp.isSuccessful) {
+                    val obj = JSONObject(bodyStr)
+                    val escrow = PolyLanceEscrow(
+                        escrowId = obj.optString("escrowId"),
+                        client = obj.optString("client"),
+                        freelancer = obj.optString("freelancer"),
+                        amountPol = obj.optDouble("amountPol", amountPol),
+                        status = obj.optString("status"),
+                        title = obj.optString("title", "Test Escrow"),
+                        token = obj.optString("token", "POL"),
+                        contractAddress = obj.optString("contractAddress")
+                    )
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = escrow,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency
+                    )
+                } else {
+                    GatewayResponse(
+                        statusCode = resp.code,
+                        data = null,
+                        rawJson = bodyStr,
+                        rateLimitRemaining = remaining,
+                        rateLimitLimit = limit,
+                        rateLimitReset = reset,
+                        latencyMs = latency,
+                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            GatewayResponse(
+                statusCode = -1,
+                data = null,
+                rawJson = null,
+                rateLimitRemaining = null,
+                rateLimitLimit = null,
+                rateLimitReset = null,
+                latencyMs = System.currentTimeMillis() - start,
+                errorMessage = e.message ?: "Network error"
+            )
+        }
     }
 
     private fun handleLiveEvent(jsonStr: String) {

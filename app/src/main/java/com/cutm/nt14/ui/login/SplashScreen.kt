@@ -8,7 +8,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.cutm.nt14.ui.components.*
 
 @Composable
 fun SplashScreen(
@@ -29,23 +33,39 @@ fun SplashScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "NT14 Optimizer",
-                style = MaterialTheme.typography.headlineLarge
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CircularProgressIndicator()
-
-            if (isOnline == false) {
-                Spacer(modifier = Modifier.height(12.dp))
+    GlassBackground {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Offline Mode (Local database active)",
-                    color = MaterialTheme.colorScheme.outline,
-                    style = MaterialTheme.typography.bodySmall
+                    text = "NT14 GATEWAY",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PolyPrimary,
+                    letterSpacing = 2.sp
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Rate Limit Optimizer",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PolyTextPrimary
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                CircularProgressIndicator(
+                    color = PolyPrimary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+
+                if (isOnline == false) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Offline Mode (Local database active)",
+                        color = PolyTextMuted,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }

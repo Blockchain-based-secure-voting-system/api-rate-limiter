@@ -25,7 +25,8 @@ sealed class BiometricLockUiState {
 @HiltViewModel
 class BiometricLockViewModel @Inject constructor(
     private val sessionManager: SessionManager,
-    private val biometricHelper: BiometricHelper
+    private val biometricHelper: BiometricHelper,
+    private val authManager: com.cutm.nt14.data.remote.GoogleAuthManager
 ) : ViewModel() {
 
     val userEmail: StateFlow<String?> = sessionManager.userEmail
@@ -59,8 +60,9 @@ class BiometricLockViewModel @Inject constructor(
         return biometricHelper.createDeviceCredentialIntent()
     }
 
-    fun signOut(onSignedOut: () -> Unit) {
+    fun signOut(activity: android.app.Activity? = null, onSignedOut: () -> Unit = {}) {
         viewModelScope.launch {
+            authManager.signOut(activity)
             sessionManager.clearSession()
             onSignedOut()
         }

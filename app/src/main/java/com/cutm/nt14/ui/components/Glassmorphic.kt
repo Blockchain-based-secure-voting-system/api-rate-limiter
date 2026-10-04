@@ -21,61 +21,80 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ==========================================
-// PolyLance Clean Transparent White Palette
-// ==========================================
-val PolyWhiteBg = Color(0xFFF8FAFC)
+// ========================================================
+// White, Black & Cobalt Blue iOS Glassmorphism Palette
+// ========================================================
+
+// Authentic Cobalt Blue (#0047AB)
+val CobaltBlue = Color(0xFF0047AB)
+val CobaltBlueDark = Color(0xFF002F75)
+val CobaltBlueLight = Color(0xFFEEF4FF)
+val CobaltBlueAccent = Color(0xFF0D5CD6)
+val CobaltBlueBorder = Color(0xFFBFD7FE)
+
+// Crisp White Canvas & Surfaces
+val PureWhite = Color(0xFFFFFFFF)
+val PolyWhiteBg = Color(0xFFF8FAFD)
 val PolyWhiteCanvasEnd = Color(0xFFF1F5F9)
 
 // Translucent White Glass Surfaces
-val GlassSurfaceWhite = Color.White.copy(alpha = 0.82f)
+val GlassSurfaceWhite = Color.White.copy(alpha = 0.88f)
 val GlassSurfaceWhiteTranslucent = Color.White.copy(alpha = 0.65f)
-val GlassSurfaceWhiteSolid = Color.White.copy(alpha = 0.95f)
+val GlassSurfaceWhiteSolid = Color.White.copy(alpha = 0.98f)
 
-// Crisp Translucent White Borders
+// Crisp White and Cobalt Tint Borders
 val GlassBorderWhite = Brush.verticalGradient(
     listOf(
         Color.White,
         Color(0xFFE2E8F0).copy(alpha = 0.85f)
     )
 )
+val GlassBorderCobalt = Brush.verticalGradient(
+    listOf(
+        CobaltBlueBorder.copy(alpha = 0.85f),
+        Color(0xFFE2E8F0).copy(alpha = 0.60f)
+    )
+)
 val GlassBorderSubtle = Brush.verticalGradient(
     listOf(
-        Color.White.copy(alpha = 0.9f),
-        Color(0xFFCBD5E1).copy(alpha = 0.5f)
+        Color.White.copy(alpha = 0.95f),
+        Color(0xFFCBD5E1).copy(alpha = 0.50f)
     )
 )
 
-// PolyLance Brand Accents
-val PolyPrimary = Color(0xFF6366F1) // Indigo / Violet
-val PolyPrimaryDark = Color(0xFF4F46E5)
-val PolyPrimaryLight = Color(0xFFEEF2FF)
-val PolyPurple = Color(0xFF7C3AED) // Sovereign Purple
-val PolySuccess = Color(0xFF10B981) // Emerald Green
-val PolySuccessBg = Color(0xFFECFDF5)
-val PolyWarning = Color(0xFFF59E0B) // Amber
-val PolyWarningBg = Color(0xFFFFFBEB)
-val PolyDanger = Color(0xFFEF4444) // Red
-val PolyDangerBg = Color(0xFFFEF2F2)
-val PolyCyan = Color(0xFF0284C7)
+// Brand Core: Cobalt Blue
+val PolyPrimary = CobaltBlue
+val PolyPrimaryDark = CobaltBlueDark
+val PolyPrimaryLight = CobaltBlueLight
+val PolyPurple = CobaltBlue
+val PolyCyan = CobaltBlueAccent
 
-// Text Hierarchy
-val PolyTextPrimary = Color(0xFF0F172A)
-val PolyTextSecondary = Color(0xFF475569)
-val PolyTextMuted = Color(0xFF94A3B8)
+// Functional Status Accents
+val PolySuccess = Color(0xFF059669) // Crisp Emerald
+val PolySuccessBg = Color(0xFFECFDF5)
+val PolyWarning = Color(0xFFD97706) // Crisp Amber
+val PolyWarningBg = Color(0xFFFFFBEB)
+val PolyDanger = Color(0xFFDC2626)  // Crisp Crimson
+val PolyDangerBg = Color(0xFFFEF2F2)
+
+// High-Contrast Black & Charcoal Text Hierarchy
+val PolyBlack = Color(0xFF000000)
+val PolyTextPrimary = Color(0xFF0A0F1D)    // Near-black sharp text
+val PolyTextSecondary = Color(0xFF334155)  // Dark slate charcoal
+val PolyTextMuted = Color(0xFF64748B)      // Muted slate gray
 
 // Backward compatibility alias for theme
 val GlassBackgroundDark = PolyWhiteBg
-val AppleBlue = PolyPrimary
-val AppleCyan = PolyCyan
+val AppleBlue = CobaltBlue
+val AppleCyan = CobaltBlueAccent
 val AppleGreen = PolySuccess
 val AppleOrange = PolyWarning
 val AppleRed = PolyDanger
-val ApplePurple = PolyPurple
+val ApplePurple = CobaltBlue
 
 /**
  * Root clean light canvas with subtle, elegant atmospheric tints
- * (soft PolyLance lavender & sky tones), perfect for transparent white glass surfaces.
+ * (soft Cobalt Blue & crisp white mist), perfect for transparent white glass surfaces.
  */
 @Composable
 fun GlassBackground(
@@ -88,14 +107,14 @@ fun GlassBackground(
             .background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xFFF8FAFC),
-                        Color(0xFFF1F5F9),
-                        Color(0xFFEDE9FE).copy(alpha = 0.35f)
+                        Color(0xFFFFFFFF),
+                        Color(0xFFF8FAFD),
+                        Color(0xFFEEF4FF).copy(alpha = 0.45f)
                     )
                 )
             )
     ) {
-        // Soft ambient top-right pastel tint (PolyLance lavender)
+        // Soft ambient top-right cobalt mist
         Box(
             modifier = Modifier
                 .size(340.dp)
@@ -105,15 +124,15 @@ fun GlassBackground(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFC7D2FE).copy(alpha = 0.35f),
-                            Color(0xFFE0E7FF).copy(alpha = 0.15f),
+                            CobaltBlue.copy(alpha = 0.09f),
+                            CobaltBlueLight.copy(alpha = 0.35f),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // Soft ambient bottom-left pastel tint (PolyLance sky)
+        // Soft ambient bottom-left clean slate tint
         Box(
             modifier = Modifier
                 .size(300.dp)
@@ -123,7 +142,7 @@ fun GlassBackground(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFBAE6FD).copy(alpha = 0.30f),
+                            Color(0xFFE2E8F0).copy(alpha = 0.35f),
                             Color.Transparent
                         )
                     )

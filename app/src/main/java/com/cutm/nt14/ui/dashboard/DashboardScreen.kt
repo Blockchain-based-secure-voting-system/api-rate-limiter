@@ -7,9 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,6 +30,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cutm.nt14.data.local.entities.RequestLog
 import com.cutm.nt14.data.remote.GatewayConnectionState
+import com.cutm.nt14.data.remote.model.PolyLanceAttestation
+import com.cutm.nt14.data.remote.model.PolyLanceEscrow
+import com.cutm.nt14.data.remote.model.PolyLanceTalent
+import com.cutm.nt14.domain.detector.OptimizationResult
 import com.cutm.nt14.ui.components.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -36,7 +44,20 @@ fun DashboardScreen(
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val polyLanceState by viewModel.polyLanceState.collectAsState()
+    val userEmail by viewModel.userEmail.collectAsState()
+    val userName by viewModel.userName.collectAsState()
     var showHostDialog by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = remember(context) {
+        var c: android.content.Context? = context
+        while (c is android.content.ContextWrapper) {
+            if (c is android.app.Activity) return@remember c
+            c = c.baseContext
+        }
+        null
+    }
 
     GlassBackground {
         Scaffold(
@@ -59,47 +80,69 @@ fun DashboardScreen(
                             letterSpacing = 1.5.sp
                         )
                         Text(
-                            text = "Live Dashboard",
+                            text = "Gateway Dashboard",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = PolyTextPrimary
                         )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .shadow(2.dp, CircleShape, ambientColor = Color(0x10000000))
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), CircleShape)
-                                .clickable { showHostDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Gateway Host Settings",
-                                tint = PolyTextSecondary,
-                                modifier = Modifier.size(18.dp)
+                        if (!userEmail.isNullOrBlank()) {
+                            Text(
+                                text = "Google: $userEmail",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = PolyPrimary
                             )
                         }
+                    }
 
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Gateway Host Switcher Button
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .shadow(2.dp, CircleShape, ambientColor = Color(0x10000000))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.85f))
+                                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                .clickable { showHostDialog = true }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Host Settings",
+                                    tint = PolyTextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Host",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PolyTextSecondary
+                                )
+                            }
+                        }
+
+                        // Logout Button
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color.White)
+                                .background(Color.White.copy(alpha = 0.85f))
                                 .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), CircleShape)
                                 .clickable {
-                                    viewModel.logout()
+                                    viewModel.logout(activity)
                                     onLogout()
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ExitToApp,
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                                 contentDescription = "Logout",
                                 tint = PolyDanger,
                                 modifier = Modifier.size(18.dp)
@@ -114,19 +157,72 @@ fun DashboardScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 100.dp)
             ) {
-                // 1. Live Gateway Connection Card
+                // 1. Live Gateway Connection Banner
                 item {
-                    GatewayConnectionCard(
-                        connectionState = uiState.connectionState,
-                        connectedHost = uiState.connectedHost,
-                        onClick = { showHostDialog = true }
-                    )
+                    val isConnected = uiState.connectionState == GatewayConnectionState.CONNECTED
+                    val isConnecting = uiState.connectionState == GatewayConnectionState.CONNECTING
+
+                    GlassCard(
+                        backgroundColor = if (isConnected) Color.White.copy(alpha = 0.90f) else Color(0xFFFFFBEB),
+                        borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, PolyWarning.copy(alpha = 0.4f)).brush
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                isConnected -> PolySuccess
+                                                isConnecting -> PolyWarning
+                                                else -> PolyDanger
+                                            }
+                                        )
+                                )
+                                Column {
+                                    Text(
+                                        text = when {
+                                            isConnected -> "Connected to Gateway"
+                                            isConnecting -> "Connecting to Gateway..."
+                                            else -> "Gateway Disconnected"
+                                        },
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = PolyTextPrimary
+                                    )
+                                    Text(
+                                        text = "ws://${uiState.connectedHost}/ws/events",
+                                        fontSize = 11.sp,
+                                        color = PolyTextSecondary,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+
+                            if (!isConnected) {
+                                GlassButton(
+                                    text = "Reconnect",
+                                    accentColor = PolyPrimary,
+                                    onClick = { viewModel.reconnect() }
+                                )
+                            }
+                        }
+                    }
                 }
 
-                // 2. Action Message Banner (if any)
-                if (uiState.actionMessage != null) {
+                // 2. Action Message Banner
+                if (!uiState.actionMessage.isNullOrBlank()) {
                     item {
                         GlassCard(
                             backgroundColor = PolyPrimaryLight,
@@ -140,14 +236,14 @@ fun DashboardScreen(
                                 Text(
                                     text = uiState.actionMessage!!,
                                     color = PolyPrimaryDark,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
                                     text = "DISMISS",
                                     color = PolyPrimary,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
                                         .clickable { viewModel.clearActionMessage() }
@@ -167,7 +263,7 @@ fun DashboardScreen(
                         color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -202,7 +298,7 @@ fun DashboardScreen(
                         color = PolyTextSecondary,
                         letterSpacing = 1.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             WhiteMetricTile(
@@ -243,12 +339,27 @@ fun DashboardScreen(
                     }
                 }
 
-                // 5. Live Traffic Stream Feed
+                // 5. PolyLance Sovereign Protocol Live Data & Rate Limit Optimizer
+                item {
+                    PolyLanceLiveProtocolSection(
+                        state = polyLanceState,
+                        onTabSelect = { viewModel.selectPolyLanceTab(it) },
+                        onFetch = { viewModel.fetchActivePolyLanceData() },
+                        onCreateEscrow = { viewModel.createTestEscrow(500.0) },
+                        onBurst = { viewModel.simulateAttackBurst() },
+                        onOptimize = { viewModel.runRateLimitOptimizerOnPolyLance() },
+                        onApplyOptimization = { viewModel.applyOptimizedLimit() },
+                        onDismissOptimization = { viewModel.dismissOptimization() },
+                        onViewJson = { viewModel.toggleJsonModal(true) }
+                    )
+                }
+
+                // 6. Live Traffic Stream Feed
                 item {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
+                            .padding(top = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -268,129 +379,618 @@ fun DashboardScreen(
 
                 if (uiState.recentLogs.isEmpty()) {
                     item {
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            backgroundColor = Color.White.copy(alpha = 0.75f)
-                        ) {
-                            Column(
+                        GlassCard(backgroundColor = Color.White.copy(alpha = 0.85f)) {
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "No Traffic",
-                                    tint = PolyTextMuted,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "No traffic recorded yet",
-                                    color = PolyTextPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Tap 'Test GET' or 'Simulate Burst' above to trigger live requests.",
-                                    color = PolyTextSecondary,
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = PolyTextMuted,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "No traffic yet. Tap 'Test GET' or 'Simulate Burst' above to generate live gateway events!",
+                                        color = PolyTextSecondary,
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 } else {
-                    items(uiState.recentLogs) { log ->
-                        WhiteLogItem(log)
+                    items(uiState.recentLogs, key = { it.logId }) { log ->
+                        WhiteLogItemCard(log)
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(84.dp))
                 }
             }
         }
+    }
 
-        // Host Switcher / Configuration Dialog
-        if (showHostDialog) {
-            GatewayHostWhiteDialog(
-                currentHost = uiState.connectedHost,
-                onDismiss = { showHostDialog = false },
-                onSave = { newHost ->
-                    viewModel.updateGatewayHost(newHost)
-                    showHostDialog = false
+    // Host Configuration Dialog
+    if (showHostDialog) {
+        WhiteHostConfigDialog(
+            currentHost = uiState.connectedHost,
+            onDismiss = { showHostDialog = false },
+            onSave = { newHost ->
+                viewModel.updateGatewayHost(newHost)
+                showHostDialog = false
+            }
+        )
+    }
+
+    // Raw JSON Inspector Dialog
+    if (polyLanceState.showJsonModal) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleJsonModal(false) },
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Raw PolyLance Gateway JSON",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = PolyTextPrimary
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF8FAFC))
+                        .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(8.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = polyLanceState.rawJson ?: "No response body recorded",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = PolyTextPrimary
+                    )
                 }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.toggleJsonModal(false) },
+                    colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
+                ) {
+                    Text("Close", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PolyLanceLiveProtocolSection(
+    state: PolyLanceInspectorUiState,
+    onTabSelect: (PolyLanceTab) -> Unit,
+    onFetch: () -> Unit,
+    onCreateEscrow: () -> Unit,
+    onBurst: () -> Unit,
+    onOptimize: () -> Unit,
+    onApplyOptimization: () -> Unit,
+    onDismissOptimization: () -> Unit,
+    onViewJson: () -> Unit
+) {
+    val activeEndpointPath = when (state.selectedTab) {
+        PolyLanceTab.ESCROWS -> "/api/polylance/escrows"
+        PolyLanceTab.ATTESTATIONS -> "/api/polylance/attestations"
+        PolyLanceTab.TALENTS -> "/api/polylance/talents"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "POLYLANCE PROTOCOL LIVE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = PolyTextSecondary,
+                letterSpacing = 1.sp
+            )
+            GlassBadge(
+                text = activeEndpointPath,
+                color = PolyPurple
+            )
+        }
+
+        GlassCard(
+            backgroundColor = Color.White.copy(alpha = 0.92f),
+            borderBrush = GlassBorderSubtle
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Header with Live Telemetry Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Real-Time Protocol Telemetry",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = PolyTextPrimary
+                        )
+                        Text(
+                            text = "Connected to Polygon Escrow & Attestation Gateway",
+                            fontSize = 11.sp,
+                            color = PolyTextSecondary
+                        )
+                    }
+
+                    if (state.lastStatusCode != null) {
+                        val is200 = state.lastStatusCode == 200 || state.lastStatusCode == 201
+                        GlassBadge(
+                            text = "HTTP ${state.lastStatusCode}",
+                            color = if (is200) PolySuccess else PolyDanger
+                        )
+                    }
+                }
+
+                // Live Header Metrics Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF8FAFC))
+                        .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Latency: ${state.lastLatencyMs ?: 0}ms",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PolyTextSecondary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "Quota: ${state.rateLimitRemaining ?: 20}/${state.rateLimitLimit ?: 20}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if ((state.rateLimitRemaining ?: 20) <= 2) PolyDanger else PolyPrimary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                // Tab Selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    PolyLanceTabChip(
+                        title = "Escrows",
+                        selected = state.selectedTab == PolyLanceTab.ESCROWS,
+                        onClick = { onTabSelect(PolyLanceTab.ESCROWS) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PolyLanceTabChip(
+                        title = "Attestations",
+                        selected = state.selectedTab == PolyLanceTab.ATTESTATIONS,
+                        onClick = { onTabSelect(PolyLanceTab.ATTESTATIONS) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PolyLanceTabChip(
+                        title = "Talents",
+                        selected = state.selectedTab == PolyLanceTab.TALENTS,
+                        onClick = { onTabSelect(PolyLanceTab.TALENTS) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Actions Deck
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GlassButton(
+                        text = if (state.isLoading) "Fetching..." else "Fetch Live Data",
+                        accentColor = PolyPrimary,
+                        onClick = onFetch,
+                        modifier = Modifier.weight(1.2f)
+                    )
+
+                    if (state.selectedTab == PolyLanceTab.ESCROWS) {
+                        GlassButton(
+                            text = "+500 POL",
+                            accentColor = PolyPurple,
+                            onClick = onCreateEscrow,
+                            modifier = Modifier.weight(0.9f)
+                        )
+                    }
+
+                    GlassButton(
+                        text = "Burst",
+                        accentColor = PolyWarning,
+                        onClick = onBurst,
+                        modifier = Modifier.weight(0.8f)
+                    )
+
+                    GlassButton(
+                        text = "Optimize",
+                        accentColor = PolyCyan,
+                        onClick = onOptimize,
+                        modifier = Modifier.weight(0.9f)
+                    )
+                }
+
+                // Rate Limit Optimizer Recommendation Card (if calculated)
+                if (state.optimizationResult != null) {
+                    OptimizationResultBanner(
+                        result = state.optimizationResult,
+                        onApply = onApplyOptimization,
+                        onDismiss = onDismissOptimization
+                    )
+                }
+
+                // Live Data Presentation
+                if (state.isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = PolyPrimary,
+                            strokeWidth = 2.5.dp
+                        )
+                    }
+                } else {
+                    when (state.selectedTab) {
+                        PolyLanceTab.ESCROWS -> {
+                            if (state.escrows.isEmpty()) {
+                                Text(
+                                    text = "No live escrows loaded yet. Tap 'Fetch Live Data' to query the gateway.",
+                                    fontSize = 12.sp,
+                                    color = PolyTextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.escrows.forEach { escrow ->
+                                        EscrowLiveCard(escrow)
+                                    }
+                                }
+                            }
+                        }
+                        PolyLanceTab.ATTESTATIONS -> {
+                            if (state.attestations.isEmpty()) {
+                                Text(
+                                    text = "No skill attestations loaded. Tap 'Fetch Live Data' to retrieve on-chain attestations.",
+                                    fontSize = 12.sp,
+                                    color = PolyTextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.attestations.forEach { att ->
+                                        AttestationLiveCard(att)
+                                    }
+                                }
+                            }
+                        }
+                        PolyLanceTab.TALENTS -> {
+                            if (state.talents.isEmpty()) {
+                                Text(
+                                    text = "No talent records loaded. Tap 'Fetch Live Data' to load verified talent directory.",
+                                    fontSize = 12.sp,
+                                    color = PolyTextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.talents.forEach { talent ->
+                                        TalentLiveCard(talent)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Footer with Raw JSON inspection
+                if (state.rawJson != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onViewJson)
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "View Raw Gateway JSON Response",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PolyPrimary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PolyLanceTabChip(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) PolyPrimary else Color(0xFFF1F5F9))
+            .border(
+                BorderStroke(
+                    1.dp,
+                    if (selected) PolyPrimary else Color(0xFFE2E8F0)
+                ),
+                RoundedCornerShape(10.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            color = if (selected) Color.White else PolyTextSecondary
+        )
+    }
+}
+
+@Composable
+fun EscrowLiveCard(escrow: PolyLanceEscrow) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White)
+            .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = escrow.escrowId,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = PolyTextPrimary
+                )
+                GlassBadge(
+                    text = escrow.status,
+                    color = when (escrow.status.lowercase()) {
+                        "completed", "funded_in_escrow", "funded" -> PolySuccess
+                        "submitted", "milestone_pending" -> PolyWarning
+                        else -> PolyPurple
+                    }
+                )
+            }
+
+            if (escrow.title.isNotBlank()) {
+                Text(
+                    text = escrow.title,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PolyTextPrimary
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${escrow.amountPol} ${escrow.token}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PolyPurple
+                )
+                Text(
+                    text = "${escrow.client.take(6)}...${escrow.client.takeLast(4)} -> ${escrow.freelancer.take(6)}...${escrow.freelancer.takeLast(4)}",
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = PolyTextSecondary
+                )
+            }
+
+            if (!escrow.contractAddress.isNullOrBlank()) {
+                Text(
+                    text = "Contract: ${escrow.contractAddress}",
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = PolyTextMuted
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AttestationLiveCard(att: PolyLanceAttestation) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White)
+            .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = att.attestationId,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = PolyTextPrimary
+                )
+                GlassBadge(text = att.soulboundTokenId, color = PolyPrimary)
+            }
+
+            Text(
+                text = att.skillAttestation,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PolyTextPrimary
+            )
+
+            Text(
+                text = "Verified for github.com/${att.developerGithub}",
+                fontSize = 11.sp,
+                color = PolySuccess
             )
         }
     }
 }
 
 @Composable
-fun GatewayConnectionCard(
-    connectionState: GatewayConnectionState,
-    connectedHost: String,
-    onClick: () -> Unit
-) {
-    val isConnected = connectionState == GatewayConnectionState.CONNECTED
-    val isConnecting = connectionState == GatewayConnectionState.CONNECTING
-    val statusColor = when {
-        isConnected -> PolySuccess
-        isConnecting -> PolyWarning
-        else -> PolyDanger
-    }
-    val statusText = when {
-        isConnected -> "GATEWAY ONLINE (LIVE)"
-        isConnecting -> "CONNECTING TO GATEWAY..."
-        else -> "DISCONNECTED (TAP TO CONFIGURE)"
-    }
-
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        backgroundColor = Color.White.copy(alpha = 0.92f),
-        elevation = 3.dp
+fun TalentLiveCard(talent: PolyLanceTalent) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White)
+            .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(10.dp))
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(statusColor)
+            Column {
+                Text(
+                    text = talent.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = PolyTextPrimary
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = statusText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        letterSpacing = 0.6.sp
-                    )
-                    Text(
-                        text = "ws://$connectedHost/ws/events",
-                        fontSize = 13.sp,
-                        color = PolyTextPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(
+                    text = talent.specialization,
+                    fontSize = 12.sp,
+                    color = PolyTextSecondary
+                )
             }
 
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = "Edit Host",
-                tint = PolyTextMuted,
-                modifier = Modifier.size(16.dp)
+            GlassBadge(
+                text = "Score ${talent.rating}",
+                color = PolyPurple
             )
+        }
+    }
+}
+
+@Composable
+fun OptimizationResultBanner(
+    result: OptimizationResult,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFFFEF3C7))
+            .border(BorderStroke(1.dp, Color(0xFFFCD34D)), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Rate Limit Optimizer Recommendation",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF92400E)
+                )
+                Text(
+                    text = "${result.totalAnalyzed} logs analyzed",
+                    fontSize = 10.sp,
+                    color = Color(0xFFB45309)
+                )
+            }
+
+            Text(
+                text = result.rationale,
+                fontSize = 12.sp,
+                color = Color(0xFF78350F)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recommended: ${result.recommendedLimitPerMin} req/min (Burst: ${result.recommendedBurstLimit})",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PolyDanger
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Dismiss",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF92400E),
+                        modifier = Modifier
+                            .clickable(onClick = onDismiss)
+                            .padding(vertical = 4.dp, horizontal = 6.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(PolyPrimary)
+                            .clickable(onClick = onApply)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Apply Policy",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -405,13 +1005,13 @@ fun WhiteMetricTile(
     modifier: Modifier = Modifier
 ) {
     GlassCard(
-        modifier = modifier.height(126.dp),
         backgroundColor = Color.White.copy(alpha = 0.88f),
-        elevation = 2.dp
+        borderBrush = GlassBorderSubtle,
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -434,7 +1034,7 @@ fun WhiteMetricTile(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = title,
+                        contentDescription = null,
                         tint = accentColor,
                         modifier = Modifier.size(16.dp)
                     )
@@ -443,7 +1043,7 @@ fun WhiteMetricTile(
 
             Text(
                 text = value,
-                fontSize = 28.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = PolyTextPrimary
             )
@@ -458,70 +1058,70 @@ fun WhiteMetricTile(
 }
 
 @Composable
-fun WhiteLogItem(log: RequestLog) {
-    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    val time = sdf.format(Date(log.timestamp))
-    val isBlocked = log.statusCode >= 400
-    val badgeColor = if (isBlocked) PolyDanger else PolySuccess
-    val badgeBg = if (isBlocked) PolyDangerBg else PolySuccessBg
-    val statusLabel = if (isBlocked) "${log.statusCode} BLOCKED" else "${log.statusCode} OK"
+fun WhiteLogItemCard(log: RequestLog) {
+    val isBlocked = log.statusCode == 429
+    val isError = log.statusCode >= 400 && !isBlocked
+    val isSuccess = log.statusCode in 200..299
+
+    val statusColor = when {
+        isSuccess -> PolySuccess
+        isBlocked -> PolyDanger
+        isError -> PolyWarning
+        else -> PolyCyan
+    }
+
+    val timeFormatted = remember(log.timestamp) {
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp))
+    }
 
     GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        backgroundColor = Color.White.copy(alpha = 0.90f),
-        elevation = 1.dp
+        backgroundColor = Color.White.copy(alpha = 0.88f),
+        borderBrush = GlassBorderSubtle
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(badgeBg)
-                            .border(BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f)), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = statusLabel,
-                            color = badgeColor,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Column {
                     Text(
                         text = log.endpointId,
-                        color = PolyTextPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.sp,
+                        color = PolyTextPrimary,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "${log.sourceIp} • ${log.latencyMs}ms • $timeFormatted",
+                        fontSize = 11.sp,
+                        color = PolyTextSecondary
                     )
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${log.sourceIp} • ${log.latencyMs} ms",
-                    color = PolyTextSecondary,
-                    fontSize = 12.sp
-                )
             }
 
-            Text(
-                text = time,
-                color = PolyTextMuted,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+            GlassBadge(
+                text = "HTTP ${log.statusCode}",
+                color = statusColor
             )
         }
     }
 }
 
 @Composable
-fun GatewayHostWhiteDialog(
+fun WhiteLogItem(log: RequestLog) = WhiteLogItemCard(log)
+
+@Composable
+fun WhiteHostConfigDialog(
     currentHost: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
@@ -532,20 +1132,25 @@ fun GatewayHostWhiteDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
         title = {
-            Text("Gateway Server Host", color = PolyTextPrimary, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Gateway Server Configuration",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = PolyTextPrimary
+            )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Select preset or enter IP of host machine running Ktor gateway:",
-                    color = PolyTextSecondary,
-                    fontSize = 13.sp
+                    text = "Configure the IP:Port of the live Kotlin/Ktor Rate Limiter Gateway running on your machine.",
+                    fontSize = 12.sp,
+                    color = PolyTextSecondary
                 )
 
                 OutlinedTextField(
                     value = hostInput,
                     onValueChange = { hostInput = it },
-                    label = { Text("Host:Port") },
+                    label = { Text("Host (e.g. 192.168.29.231:8000)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = PolyTextPrimary,

@@ -75,7 +75,24 @@ data class HealthResponse(val status: String, val subscribers: Int)
 
 // PolyLance Web3 Protocol Models
 @Serializable
-data class PolyLanceEscrow(val escrowId: String, val client: String, val freelancer: String, val amountPol: Double, val status: String)
+data class PolyLanceEscrow(
+    val escrowId: String,
+    val client: String,
+    val freelancer: String,
+    val amountPol: Double = 0.0,
+    val status: String,
+    val title: String = "",
+    val token: String = "POL",
+    val contractAddress: String? = null,
+    val createdAt: Long? = null
+)
+
+@Serializable
+data class CreateEscrowRequest(
+    val client: String = "0x3F9a...b210",
+    val freelancer: String = "0x78Ce...4a91",
+    val amountPol: Double = 500.0
+)
 
 @Serializable
 data class PolyLanceAttestation(val attestationId: String, val developerGithub: String, val skillAttestation: String, val soulboundTokenId: String)
