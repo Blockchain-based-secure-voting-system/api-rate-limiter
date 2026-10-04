@@ -34,6 +34,7 @@ import com.cutm.nt14.data.remote.model.PolyLanceAttestation
 import com.cutm.nt14.data.remote.model.PolyLanceEscrow
 import com.cutm.nt14.data.remote.model.PolyLanceTalent
 import com.cutm.nt14.domain.detector.OptimizationResult
+import com.cutm.nt14.domain.model.UserRole
 import com.cutm.nt14.ui.components.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -60,9 +61,103 @@ fun DashboardScreen(
     }
 
     GlassBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
+        if (uiState.userRole == UserRole.ADMIN) {
+            AdminDashboardContent(
+                viewModel = viewModel,
+                uiState = uiState,
+                polyLanceState = polyLanceState,
+                userEmail = userEmail,
+                activity = activity,
+                onLogout = onLogout,
+                onShowHostDialog = { showHostDialog = true }
+            )
+        } else {
+            ViewerDashboardContent(
+                viewModel = viewModel,
+                uiState = uiState,
+                polyLanceState = polyLanceState,
+                userEmail = userEmail,
+                userName = userName,
+                activity = activity,
+                onLogout = onLogout
+            )
+        }
+    }
+
+    // Host Configuration Dialog (Admin only)
+    if (showHostDialog && uiState.userRole == UserRole.ADMIN) {
+        WhiteHostConfigDialog(
+            currentHost = uiState.connectedHost,
+            onDismiss = { showHostDialog = false },
+            onSave = { newHost ->
+                viewModel.updateGatewayHost(newHost)
+                showHostDialog = false
+            }
+        )
+    }
+
+    // Raw JSON Inspector Dialog
+    if (polyLanceState.showJsonModal) {
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleJsonModal(false) },
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Raw PolyLance Gateway JSON",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = PolyTextPrimary
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF8FAFC))
+                        .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(8.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = polyLanceState.rawJson ?: "No response body recorded",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = PolyTextPrimary
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.toggleJsonModal(false) },
+                    colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
+                ) {
+                    Text("Close", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+}
+
+/**
+ * ========================================================
+ * 1. ADMIN DASHBOARD: Full Gateway Control & Operations
+ * ========================================================
+ */
+@Composable
+fun AdminDashboardContent(
+    viewModel: DashboardViewModel,
+    uiState: DashboardUiState,
+    polyLanceState: PolyLanceInspectorUiState,
+    userEmail: String?,
+    activity: android.app.Activity?,
+    onLogout: () -> Unit,
+    onShowHostDialog: () -> Unit
+) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -72,13 +167,22 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "NT14 OPTIMIZER",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PolyPrimary,
-                            letterSpacing = 1.5.sp
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "ADMIN CONTROL CENTER",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PolyPrimary,
+                                letterSpacing = 1.5.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(modifier = Modifier.clickable { viewModel.toggleRole() }) {
+                                GlassBadge(
+                                    text = "ADMINISTRATOR",
+                                    color = PolyPrimary
+                                )
+                            }
+                        }
                         Text(
                             text = "Gateway Dashboard",
                             fontSize = 24.sp,
@@ -105,7 +209,7 @@ fun DashboardScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.White.copy(alpha = 0.85f))
                                 .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
-                                .clickable { showHostDialog = true }
+                                .clickable { onShowHostDialog() }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -414,73 +518,370 @@ fun DashboardScreen(
         }
     }
 
-    // Host Configuration Dialog
-    if (showHostDialog) {
-        WhiteHostConfigDialog(
-            currentHost = uiState.connectedHost,
-            onDismiss = { showHostDialog = false },
-            onSave = { newHost ->
-                viewModel.updateGatewayHost(newHost)
-                showHostDialog = false
-            }
-        )
-    }
-
-    // Raw JSON Inspector Dialog
-    if (polyLanceState.showJsonModal) {
-        AlertDialog(
-            onDismissRequest = { viewModel.toggleJsonModal(false) },
-            containerColor = Color.White,
-            title = {
-                Text(
-                    text = "Raw PolyLance Gateway JSON",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = PolyTextPrimary
-                )
-            },
-            text = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 350.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), RoundedCornerShape(8.dp))
-                        .verticalScroll(rememberScrollState())
-                        .padding(12.dp)
-                ) {
+/**
+ * ========================================================
+ * 2. VIEWER DASHBOARD: Dedicated Passive Observability
+ * ========================================================
+ */
+@Composable
+fun ViewerDashboardContent(
+    viewModel: DashboardViewModel,
+    uiState: DashboardUiState,
+    polyLanceState: PolyLanceInspectorUiState,
+    userEmail: String?,
+    userName: String?,
+    activity: android.app.Activity?,
+    onLogout: () -> Unit
+) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "TELEMETRY OBSERVER",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PolyPrimary,
+                            letterSpacing = 1.5.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(modifier = Modifier.clickable { viewModel.toggleRole() }) {
+                            GlassBadge(
+                                text = "VIEWER ACCESS",
+                                color = PolyTextSecondary
+                            )
+                        }
+                    }
                     Text(
-                        text = polyLanceState.rawJson ?: "No response body recorded",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
+                        text = "Viewer Dashboard",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
                         color = PolyTextPrimary
                     )
+                    if (!userEmail.isNullOrBlank()) {
+                        Text(
+                            text = "Google: $userEmail",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PolyTextSecondary
+                        )
+                    }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.toggleJsonModal(false) },
-                    colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
+
+                // Minimalist Logout Button (No Host Settings Button)
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.88f))
+                        .border(BorderStroke(1.dp, Color(0xFFE2E8F0)), CircleShape)
+                        .clickable {
+                            viewModel.logout(activity)
+                            onLogout()
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("Close", color = Color.White, fontWeight = FontWeight.Bold)
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = "Logout",
+                        tint = PolyDanger,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
-        )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            // 1. Viewer Welcome & Access Level Card
+            item {
+                GlassCard(
+                    backgroundColor = Color.White.copy(alpha = 0.94f),
+                    borderBrush = GlassBorderCobalt
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(PolyPrimaryLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = PolyPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Welcome, ${userName ?: "Viewer"}",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PolyTextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Signed in with Google ($userEmail). You have real-time read-only access to monitor gateway health, availability SLAs, and live Polygon smart contract escrows.",
+                                fontSize = 12.sp,
+                                color = PolyTextSecondary,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Gateway SLA & Operational Availability Banner
+            item {
+                val isConnected = uiState.connectionState == GatewayConnectionState.CONNECTED
+                val isConnecting = uiState.connectionState == GatewayConnectionState.CONNECTING
+
+                GlassCard(
+                    backgroundColor = if (isConnected) Color.White.copy(alpha = 0.90f) else Color(0xFFFFFBEB),
+                    borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, PolyWarning.copy(alpha = 0.4f)).brush
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        when {
+                                            isConnected -> PolySuccess
+                                            isConnecting -> PolyWarning
+                                            else -> PolyDanger
+                                        }
+                                    )
+                            )
+                            Column {
+                                Text(
+                                    text = if (isConnected) "Gateway Operational" else if (isConnecting) "Connecting to Gateway..." else "Gateway Offline",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = PolyTextPrimary
+                                )
+                                Text(
+                                    text = "SLA: 99.98% availability • Sub-ms Rate Limiting",
+                                    fontSize = 11.sp,
+                                    color = PolyTextSecondary
+                                )
+                            }
+                        }
+
+                        if (!isConnected) {
+                            GlassButton(
+                                text = "Reconnect",
+                                accentColor = PolyPrimary,
+                                onClick = { viewModel.reconnect() }
+                            )
+                        } else {
+                            GlassBadge(
+                                text = "LIVE FEED",
+                                color = PolySuccess
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. High-Level Service Telemetry Tiles
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    WhiteMetricTile(
+                        title = "TOTAL REQUESTS",
+                        value = "${uiState.totalRequests}",
+                        subtitle = "monitored requests",
+                        icon = Icons.Default.Info,
+                        accentColor = PolyPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WhiteMetricTile(
+                        title = "ACTIVE ROUTES",
+                        value = "${uiState.endpointCount}",
+                        subtitle = "rate-limited routes",
+                        icon = Icons.Default.List,
+                        accentColor = PolyPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    WhiteMetricTile(
+                        title = "QOS SCORE",
+                        value = "${(100 - uiState.errorRate * 100).toInt()}%",
+                        subtitle = if (uiState.errorRate > 0) "${(uiState.errorRate * 100).toInt()}% throttled" else "zero drops",
+                        icon = Icons.Default.Check,
+                        accentColor = if (uiState.errorRate > 0.1f) PolyWarning else PolySuccess,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WhiteMetricTile(
+                        title = "SECURITY THREATS",
+                        value = "${uiState.activeIncidents}",
+                        subtitle = if (uiState.activeIncidents == 0) "all clear" else "threats caught",
+                        icon = Icons.Default.Warning,
+                        accentColor = if (uiState.activeIncidents == 0) PolySuccess else PolyDanger,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // 4. Real-Time PolyLance Protocol Live Inspector (Viewer Read-Only Mode)
+            item {
+                PolyLanceLiveProtocolSection(
+                    state = polyLanceState,
+                    isAdmin = false,
+                    onTabSelect = { viewModel.selectPolyLanceTab(it) },
+                    onFetch = { viewModel.fetchActivePolyLanceData() }
+                )
+            }
+
+            // 5. Live Request Telemetry Feed
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "LIVE REQUEST TELEMETRY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PolyTextSecondary,
+                        letterSpacing = 1.sp
+                    )
+                    GlassBadge(
+                        text = "${uiState.recentLogs.size} IN STREAM",
+                        color = PolyPrimary
+                    )
+                }
+            }
+
+            if (uiState.recentLogs.isEmpty()) {
+                item {
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        backgroundColor = Color.White.copy(alpha = 0.85f),
+                        elevation = 1.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = PolyTextMuted,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Awaiting Live Requests",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = PolyTextPrimary
+                            )
+                            Text(
+                                text = "Traffic hitting protected endpoints will stream here in real-time.",
+                                color = PolyTextSecondary,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(uiState.recentLogs, key = { it.logId }) { log ->
+                    WhiteLogItemCard(log)
+                }
+            }
+
+            // 6. Security Governance Information Banner
+            item {
+                GlassCard(
+                    backgroundColor = Color.White.copy(alpha = 0.90f),
+                    borderBrush = GlassBorderSubtle
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Security",
+                            tint = PolyPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Gateway Policy Enforcement Active",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PolyTextPrimary
+                            )
+                            Text(
+                                text = "Token Bucket burst control and Sliding Window rate limiting are enforced. Administered by authorized administrators.",
+                                fontSize = 11.sp,
+                                color = PolyTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun PolyLanceLiveProtocolSection(
     state: PolyLanceInspectorUiState,
+    isAdmin: Boolean = true,
     onTabSelect: (PolyLanceTab) -> Unit,
     onFetch: () -> Unit,
-    onCreateEscrow: () -> Unit,
-    onBurst: () -> Unit,
-    onOptimize: () -> Unit,
-    onApplyOptimization: () -> Unit,
-    onDismissOptimization: () -> Unit,
-    onViewJson: () -> Unit
+    onCreateEscrow: () -> Unit = {},
+    onBurst: () -> Unit = {},
+    onOptimize: () -> Unit = {},
+    onApplyOptimization: () -> Unit = {},
+    onDismissOptimization: () -> Unit = {},
+    onViewJson: () -> Unit = {}
 ) {
     val activeEndpointPath = when (state.selectedTab) {
         PolyLanceTab.ESCROWS -> "/api/polylance/escrows"
@@ -596,41 +997,49 @@ fun PolyLanceLiveProtocolSection(
                 // Actions Deck
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     GlassButton(
-                        text = if (state.isLoading) "Fetching..." else "Fetch Live Data",
+                        text = if (state.isLoading) "Fetching..." else if (isAdmin) "Fetch Live Data" else "Refresh Live Data",
                         accentColor = PolyPrimary,
                         onClick = onFetch,
-                        modifier = Modifier.weight(1.2f)
+                        modifier = if (isAdmin) Modifier.weight(1.2f) else Modifier.weight(1f)
                     )
 
-                    if (state.selectedTab == PolyLanceTab.ESCROWS) {
+                    if (isAdmin) {
+                        if (state.selectedTab == PolyLanceTab.ESCROWS) {
+                            GlassButton(
+                                text = "+500 POL",
+                                accentColor = PolyPurple,
+                                onClick = onCreateEscrow,
+                                modifier = Modifier.weight(0.9f)
+                            )
+                        }
+
                         GlassButton(
-                            text = "+500 POL",
-                            accentColor = PolyPurple,
-                            onClick = onCreateEscrow,
+                            text = "Burst",
+                            accentColor = PolyWarning,
+                            onClick = onBurst,
+                            modifier = Modifier.weight(0.8f)
+                        )
+
+                        GlassButton(
+                            text = "Optimize",
+                            accentColor = PolyCyan,
+                            onClick = onOptimize,
                             modifier = Modifier.weight(0.9f)
                         )
+                    } else {
+                        GlassBadge(
+                            text = "READ-ONLY",
+                            color = PolyPrimary
+                        )
                     }
-
-                    GlassButton(
-                        text = "Burst",
-                        accentColor = PolyWarning,
-                        onClick = onBurst,
-                        modifier = Modifier.weight(0.8f)
-                    )
-
-                    GlassButton(
-                        text = "Optimize",
-                        accentColor = PolyCyan,
-                        onClick = onOptimize,
-                        modifier = Modifier.weight(0.9f)
-                    )
                 }
 
-                // Rate Limit Optimizer Recommendation Card (if calculated)
-                if (state.optimizationResult != null) {
+                // Rate Limit Optimizer Recommendation Card (Admin Only)
+                if (isAdmin && state.optimizationResult != null) {
                     OptimizationResultBanner(
                         result = state.optimizationResult,
                         onApply = onApplyOptimization,
@@ -708,8 +1117,8 @@ fun PolyLanceLiveProtocolSection(
                     }
                 }
 
-                // Footer with Raw JSON inspection
-                if (state.rawJson != null) {
+                // Footer with Raw JSON inspection (Admin only)
+                if (isAdmin && state.rawJson != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

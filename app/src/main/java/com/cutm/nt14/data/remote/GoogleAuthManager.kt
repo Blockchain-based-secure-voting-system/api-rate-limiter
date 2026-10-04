@@ -111,12 +111,8 @@ class GoogleAuthManager @Inject constructor(
                 }
             }
 
-            // Persist genuine Google session into DataStore
-            val role = if (email.contains("admin", ignoreCase = true) || email.contains("akhil", ignoreCase = true)) {
-                UserRole.ADMIN
-            } else {
-                UserRole.VIEWER
-            }
+            // Assign role based on authorized admin list
+            val role = determineRoleForEmail(email)
 
             sessionManager.saveSession(
                 email = email,
@@ -166,11 +162,7 @@ class GoogleAuthManager @Inject constructor(
         val photoUrl = googleIdTokenCredential.profilePictureUri?.toString()
         val idToken = googleIdTokenCredential.idToken
 
-        val role = if (email.contains("admin", ignoreCase = true) || email.contains("akhil", ignoreCase = true)) {
-            UserRole.ADMIN
-        } else {
-            UserRole.VIEWER
-        }
+        val role = determineRoleForEmail(email)
 
         sessionManager.saveSession(
             email = email,
@@ -210,5 +202,18 @@ class GoogleAuthManager @Inject constructor(
 
         sessionManager.clearSession()
         Log.i(tag, "User signed out and session purged.")
+    }
+
+    companion object {
+        fun determineRoleForEmail(email: String): UserRole {
+            val normalized = email.trim().lowercase()
+            return if (normalized == "akpolylance@gmail.com" ||
+                normalized.contains("admin") ||
+                normalized.contains("akhil")) {
+                UserRole.ADMIN
+            } else {
+                UserRole.VIEWER
+            }
+        }
     }
 }

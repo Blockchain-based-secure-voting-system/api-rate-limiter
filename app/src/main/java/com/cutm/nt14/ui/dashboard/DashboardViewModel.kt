@@ -17,6 +17,7 @@ import com.cutm.nt14.data.remote.model.PolyLanceEscrow
 import com.cutm.nt14.data.remote.model.PolyLanceTalent
 import com.cutm.nt14.domain.detector.OptimizationResult
 import com.cutm.nt14.domain.detector.RateLimitOptimizer
+import com.cutm.nt14.domain.model.UserRole
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -54,7 +55,8 @@ data class DashboardUiState(
     val recentLogs: List<RequestLog> = emptyList(),
     val actionMessage: String? = null,
     val userEmail: String? = null,
-    val userName: String? = null
+    val userName: String? = null,
+    val userRole: UserRole = UserRole.VIEWER
 )
 
 @HiltViewModel
@@ -83,6 +85,10 @@ class DashboardViewModel @Inject constructor(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null
     )
 
+    val userRole: StateFlow<UserRole> = sessionManager.userRole.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), UserRole.VIEWER
+    )
+
     private val optimizer = RateLimitOptimizer()
 
     private val dbDataFlow = combine(
@@ -97,8 +103,9 @@ class DashboardViewModel @Inject constructor(
         dbDataFlow,
         wsClient.connectionState,
         wsClient.connectedHost,
+        sessionManager.userRole,
         _actionMessage
-    ) { (endpoints, logs, incidents), connState, host, msg ->
+    ) { (endpoints, logs, incidents), connState, host, role, msg ->
         val totalReq = logs.size
         val errorCount = logs.count { it.statusCode >= 400 }
         val rate = if (totalReq > 0) errorCount.toFloat() / totalReq else 0f
@@ -112,13 +119,25 @@ class DashboardViewModel @Inject constructor(
             connectionState = connState,
             connectedHost = host,
             recentLogs = logs.take(6),
-            actionMessage = msg
+            actionMessage = msg,
+            userRole = role
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DashboardUiState()
     )
+
+    fun toggleRole() {
+        viewModelScope.launch {
+            val current = sessionManager.userRole.first()
+            val next = if (current == UserRole.ADMIN) UserRole.VIEWER else UserRole.ADMIN
+            val email = sessionManager.userEmail.first() ?: "user@google.com"
+            val name = sessionManager.userName.first() ?: "Google User"
+            sessionManager.saveSession(email = email, name = name, role = next)
+            _actionMessage.value = "Switched to ${next.name} Mode"
+        }
+    }
 
     init {
         // Auto-fetch initial live escrows on launch
