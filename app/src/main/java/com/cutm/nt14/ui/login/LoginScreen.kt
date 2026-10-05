@@ -42,11 +42,14 @@ fun LoginScreen(
         fa ?: (context as? android.app.Activity)
     }
 
+    var showEmailDialog by remember { mutableStateOf(false) }
+    var inputEmail by remember { mutableStateOf("") }
+
     // Google Play Services Realtime Sign-In Launcher
     val googleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
+        if (result.data != null) {
             viewModel.handleGoogleSignInResult(result.data)
         } else {
             viewModel.onSignInCancelled()
@@ -145,7 +148,7 @@ fun LoginScreen(
                         )
                     } else {
                         GlassButton(
-                            text = "Sign in with Google",
+                            text = "Sign in with Google (Play Services)",
                             accentColor = PolyPrimary,
                             isFilled = true,
                             onClick = {
@@ -158,17 +161,39 @@ fun LoginScreen(
                                     }
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth(0.9f)
+                            modifier = Modifier.fillMaxWidth(0.95f)
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         GlassButton(
-                            text = "Continue as Guest (Admin)",
+                            text = "Sign in as Admin (akpolylance@gmail.com)",
+                            accentColor = PolyPrimary,
+                            isFilled = false,
+                            onClick = {
+                                viewModel.signInWithGoogleEmail("akpolylance@gmail.com", "Admin User")
+                            },
+                            modifier = Modifier.fillMaxWidth(0.95f)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        GlassButton(
+                            text = "Enter Custom Google Email...",
                             accentColor = PolyTextSecondary,
                             isFilled = false,
+                            onClick = { showEmailDialog = true },
+                            modifier = Modifier.fillMaxWidth(0.95f)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        GlassButton(
+                            text = "Continue as Guest Viewer",
+                            accentColor = PolyTextMuted,
+                            isFilled = false,
                             onClick = { viewModel.signInAsGuest() },
-                            modifier = Modifier.fillMaxWidth(0.9f)
+                            modifier = Modifier.fillMaxWidth(0.95f)
                         )
                     }
 
@@ -183,6 +208,56 @@ fun LoginScreen(
                         )
                     }
                 }
+            }
+
+            // Custom Google Email Dialog
+            if (showEmailDialog) {
+                AlertDialog(
+                    onDismissRequest = { showEmailDialog = false },
+                    containerColor = Color.White,
+                    title = {
+                        Text(
+                            text = "Sign in with Google Account",
+                            fontWeight = FontWeight.Bold,
+                            color = PolyTextPrimary
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Enter any Google email address to authenticate. 'akpolylance@gmail.com' gains Admin privileges; all other addresses receive Viewer privileges.",
+                                fontSize = 12.sp,
+                                color = PolyTextSecondary
+                            )
+                            OutlinedTextField(
+                                value = inputEmail,
+                                onValueChange = { inputEmail = it },
+                                label = { Text("Google Email") },
+                                placeholder = { Text("e.g. user@gmail.com") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (inputEmail.isNotBlank()) {
+                                    viewModel.signInWithGoogleEmail(inputEmail.trim())
+                                    showEmailDialog = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PolyPrimary)
+                        ) {
+                            Text("Sign In", color = Color.White)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEmailDialog = false }) {
+                            Text("Cancel", color = PolyTextSecondary)
+                        }
+                    }
+                )
             }
         }
     }

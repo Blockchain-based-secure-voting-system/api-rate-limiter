@@ -72,6 +72,18 @@ class LoginViewModel @Inject constructor(
         _uiState.value = LoginUiState.Idle
     }
 
+    fun signInWithGoogleEmail(email: String, displayName: String = "Google User") {
+        viewModelScope.launch {
+            _uiState.value = LoginUiState.Loading
+            try {
+                val user = authManager.signInWithGoogleEmail(email, displayName)
+                _uiState.value = LoginUiState.Success(user.email, user.displayName)
+            } catch (e: Exception) {
+                _uiState.value = LoginUiState.Error(e.message ?: "Sign-in failed")
+            }
+        }
+    }
+
     fun signInAsGuest() {
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading

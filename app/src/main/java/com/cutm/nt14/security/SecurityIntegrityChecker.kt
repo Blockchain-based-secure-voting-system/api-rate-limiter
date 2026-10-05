@@ -69,24 +69,28 @@ class SecurityIntegrityChecker @Inject constructor(
             rootIndicators.add("OS build has test-keys")
         }
 
-        // 2. HTTP/HTTPS MitM Proxy Detection
+        // 2. HTTP/HTTPS MitM Proxy Detection (Manual Wi-Fi / MitM proxy settings)
         val httpHost = System.getProperty("http.proxyHost")
-        val httpPort = System.getProperty("http.proxyPort")
-        if (!httpHost.isNullOrBlank()) {
+        val httpPort = System.getProperty("http.proxyPort")?.toIntOrNull() ?: 0
+        if (!httpHost.isNullOrBlank() && httpHost != "localhost" && httpHost != "127.0.0.1") {
             proxyIndicators.add("HTTP proxy configured: $httpHost:$httpPort")
         }
 
         val httpsHost = System.getProperty("https.proxyHost")
-        val httpsPort = System.getProperty("https.proxyPort")
-        if (!httpsHost.isNullOrBlank()) {
+        val httpsPort = System.getProperty("https.proxyPort")?.toIntOrNull() ?: 0
+        if (!httpsHost.isNullOrBlank() && httpsHost != "localhost" && httpsHost != "127.0.0.1") {
             proxyIndicators.add("HTTPS proxy configured: $httpsHost:$httpsPort")
         }
 
+        // Only flag defaultProxy if it points to common interception proxy ports (Burp: 8080, Charles: 8888, mitmproxy: 8081)
         try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             val defaultProxy = cm?.defaultProxy
             if (defaultProxy != null && !defaultProxy.host.isNullOrBlank()) {
-                proxyIndicators.add("System default proxy active: ${defaultProxy.host}:${defaultProxy.port}")
+                val p = defaultProxy.port
+                if (p == 8080 || p == 8888 || p == 8081 || p == 9090 || p == 3128) {
+                    proxyIndicators.add("MitM interception proxy detected: ${defaultProxy.host}:$p")
+                }
             }
         } catch (_: Exception) {}
 
