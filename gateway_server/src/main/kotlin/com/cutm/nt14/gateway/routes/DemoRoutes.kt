@@ -21,30 +21,34 @@ private val dynamicLocalEscrows = CopyOnWriteArrayList<PolyLanceEscrow>()
 fun Route.demoRoutes() {
     route("/api") {
         get("/users") {
-            val users = listOf(
-                DemoUser("usr_01", "Alice Chen", "ADMIN"),
-                DemoUser("usr_02", "Bob Smith", "ANALYST"),
-                DemoUser("usr_03", "Charlie Davis", "VIEWER")
-            )
-            call.respond(users)
+            try {
+                val liveTalents = upstream.fetchTalents()
+                call.respond(liveTalents)
+            } catch (e: Exception) {
+                logger.error("Failed to fetch live talents/users from PolyLance upstream: ${e.message}")
+                call.respond(HttpStatusCode.BadGateway, mapOf("error" to (e.message ?: "Upstream unavailable")))
+            }
         }
 
         get("/orders") {
-            val orders = listOf(
-                DemoOrder("ord_101", 249.99, "CONFIRMED"),
-                DemoOrder("ord_102", 49.50, "SHIPPED"),
-                DemoOrder("ord_103", 1120.00, "PROCESSING")
-            )
-            call.respond(orders)
+            try {
+                val liveEscrows = upstream.fetchEscrows()
+                val combined = dynamicLocalEscrows.toList() + liveEscrows
+                call.respond(combined)
+            } catch (e: Exception) {
+                logger.error("Failed to fetch live escrows/orders from PolyLance upstream: ${e.message}")
+                call.respond(HttpStatusCode.BadGateway, mapOf("error" to (e.message ?: "Upstream unavailable")))
+            }
         }
 
         get("/products") {
-            val products = listOf(
-                DemoProduct("sku_phone", "Smart Sensor Phone", 699.99),
-                DemoProduct("sku_watch", "Optimizer Smartwatch", 199.99),
-                DemoProduct("sku_tablet", "Data Gateway Tablet", 449.00)
-            )
-            call.respond(products)
+            try {
+                val liveAttestations = upstream.fetchAttestations()
+                call.respond(liveAttestations)
+            } catch (e: Exception) {
+                logger.error("Failed to fetch live attestations from PolyLance upstream: ${e.message}")
+                call.respond(HttpStatusCode.BadGateway, mapOf("error" to (e.message ?: "Upstream unavailable")))
+            }
         }
 
         // Real-Time PolyLance Sovereign Protocol Endpoints

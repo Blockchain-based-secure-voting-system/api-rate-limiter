@@ -53,7 +53,7 @@ data class DashboardUiState(
     val activeIncidents: Int = 0,
     val isLoading: Boolean = true,
     val connectionState: GatewayConnectionState = GatewayConnectionState.DISCONNECTED,
-    val connectedHost: String = "192.168.29.231:8000",
+    val connectedHost: String = "10.0.2.2:8000",
     val recentLogs: List<RequestLog> = emptyList(),
     val actionMessage: String? = null,
     val userEmail: String? = null,

@@ -1685,18 +1685,28 @@ fun WhiteHostConfigDialog(
                     fontWeight = FontWeight.Bold
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    WhitePresetChip("Wi-Fi (192.168.29.231)") {
-                        hostInput = "192.168.29.231:8000"
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        WhitePresetChip("Emulator (10.0.2.2)") {
+                            hostInput = "10.0.2.2:8000"
+                        }
+                        WhitePresetChip("Wi-Fi (172.16.52.25)") {
+                            hostInput = "172.16.52.25:8000"
+                        }
                     }
-                    WhitePresetChip("ADB (127.0.0.1)") {
-                        hostInput = "127.0.0.1:8000"
-                    }
-                    WhitePresetChip("Emulator") {
-                        hostInput = "10.0.2.2:8000"
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        WhitePresetChip("ADB (127.0.0.1)") {
+                            hostInput = "127.0.0.1:8000"
+                        }
+                        WhitePresetChip("Cloud (Render)") {
+                            hostInput = "polylance-fv-1-45wy.onrender.com"
+                        }
                     }
                 }
             }

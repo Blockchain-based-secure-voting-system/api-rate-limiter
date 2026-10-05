@@ -64,8 +64,24 @@ class GatewayWebSocketClient @Inject constructor(
     private val _connectionState = MutableStateFlow(GatewayConnectionState.DISCONNECTED)
     val connectionState: StateFlow<GatewayConnectionState> = _connectionState.asStateFlow()
 
-    private val _connectedHost = MutableStateFlow("192.168.29.231:8000")
+    private val _connectedHost = MutableStateFlow("10.0.2.2:8000")
     val connectedHost: StateFlow<String> = _connectedHost.asStateFlow()
+
+    fun buildHttpUrl(host: String, path: String): String {
+        val cleanHost = host.removePrefix("http://").removePrefix("https://").trimEnd('/')
+        val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("https://")
+        val scheme = if (isSecure) "https" else "http"
+        val cleanPath = if (path.startsWith("/")) path else "/$path"
+        return "$scheme://$cleanHost$cleanPath"
+    }
+
+    fun buildWsUrl(host: String, path: String): String {
+        val cleanHost = host.removePrefix("ws://").removePrefix("wss://").removePrefix("http://").removePrefix("https://").trimEnd('/')
+        val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("wss://") || host.startsWith("https://")
+        val scheme = if (isSecure) "wss" else "ws"
+        val cleanPath = if (path.startsWith("/")) path else "/$path"
+        return "$scheme://$cleanHost$cleanPath?api_key=dev-local-key"
+    }
 
     fun connect() {
         if (_connectionState.value == GatewayConnectionState.CONNECTED ||
@@ -92,7 +108,7 @@ class GatewayWebSocketClient @Inject constructor(
         _connectionState.value = GatewayConnectionState.CONNECTING
         _connectedHost.value = host
 
-        val wsUrl = "ws://$host/ws/events?api_key=dev-local-key"
+        val wsUrl = buildWsUrl(host, "/ws/events")
         Log.i(tag, "Connecting to live gateway: $wsUrl")
 
         val request = Request.Builder()
@@ -149,9 +165,9 @@ class GatewayWebSocketClient @Inject constructor(
      * The gateway will process it, rate-limit if necessary, and broadcast
      * the event via WebSocket back to this app in real time!
      */
-    suspend fun sendTestRequest(endpoint: String = "/api/users"): Int = withContext(Dispatchers.IO) {
+    suspend fun sendTestRequest(endpoint: String = "/api/polylance/escrows"): Int = withContext(Dispatchers.IO) {
         val host = _connectedHost.value
-        val url = "http://$host$endpoint"
+        val url = buildHttpUrl(host, endpoint)
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
@@ -167,9 +183,9 @@ class GatewayWebSocketClient @Inject constructor(
      * Fires a burst of concurrent requests to trigger rate limiting and DDoS alarms
      * against the live gateway server.
      */
-    suspend fun sendBurstSimulation(count: Int = 18, endpoint: String = "/api/users") = withContext(Dispatchers.IO) {
+    suspend fun sendBurstSimulation(count: Int = 18, endpoint: String = "/api/polylance/escrows") = withContext(Dispatchers.IO) {
         val host = _connectedHost.value
-        val url = "http://$host$endpoint"
+        val url = buildHttpUrl(host, endpoint)
         val jobs = (1..count).map {
             async {
                 try {
@@ -186,7 +202,7 @@ class GatewayWebSocketClient @Inject constructor(
     suspend fun fetchPolyLanceEscrows(): GatewayResponse<List<PolyLanceEscrow>> = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
         val host = _connectedHost.value
-        val url = "http://$host/api/polylance/escrows"
+        val url = buildHttpUrl(host, "/api/polylance/escrows")
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
@@ -253,7 +269,7 @@ class GatewayWebSocketClient @Inject constructor(
     suspend fun fetchPolyLanceAttestations(): GatewayResponse<List<PolyLanceAttestation>> = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
         val host = _connectedHost.value
-        val url = "http://$host/api/polylance/attestations"
+        val url = buildHttpUrl(host, "/api/polylance/attestations")
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
@@ -316,7 +332,7 @@ class GatewayWebSocketClient @Inject constructor(
     suspend fun fetchPolyLanceTalents(): GatewayResponse<List<PolyLanceTalent>> = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
         val host = _connectedHost.value
-        val url = "http://$host/api/polylance/talents"
+        val url = buildHttpUrl(host, "/api/polylance/talents")
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
@@ -383,7 +399,7 @@ class GatewayWebSocketClient @Inject constructor(
     ): GatewayResponse<PolyLanceEscrow> = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
         val host = _connectedHost.value
-        val url = "http://$host/api/polylance/escrows"
+        val url = buildHttpUrl(host, "/api/polylance/escrows")
         try {
             val jsonBody = JSONObject().apply {
                 put("client", clientAddr)

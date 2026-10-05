@@ -47,7 +47,7 @@ class SessionManager @Inject constructor(
     private val GATEWAY_HOST = stringPreferencesKey("gateway_host")
 
     val gatewayHost: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[GATEWAY_HOST] ?: "192.168.29.231:8000"
+        prefs[GATEWAY_HOST] ?: "10.0.2.2:8000"
     }
 
     suspend fun saveGatewayHost(host: String) {
