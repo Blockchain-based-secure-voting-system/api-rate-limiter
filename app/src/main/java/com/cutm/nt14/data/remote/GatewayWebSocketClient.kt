@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.cutm.nt14.BuildConfig
 import com.cutm.nt14.MainActivity
 import com.cutm.nt14.data.local.SessionManager
 import com.cutm.nt14.data.local.SyncStatus
@@ -32,15 +33,18 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class GatewayConnectionState {
-    DISCONNECTED,
-    CONNECTING,
-    CONNECTED
+sealed class GatewayConnectionState {
+    object Idle : GatewayConnectionState()
+    object WakingServer : GatewayConnectionState()
+    object Connecting : GatewayConnectionState()
+    object Connected : GatewayConnectionState()
+    data class Failed(val code: Int? = null, val message: String = "Connection failed") : GatewayConnectionState()
 }
 
 @Singleton
@@ -52,36 +56,40 @@ class GatewayWebSocketClient @Inject constructor(
     private val sessionManager: SessionManager
 ) {
     private val tag = "GatewayWS"
+
+    // OkHttpClient with 60s timeout for Render cold start and 20s ping interval for proxy keep-alive
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .pingInterval(20, TimeUnit.SECONDS)
         .build()
 
     private var webSocket: WebSocket? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var reconnectJob: Job? = null
+    private var reconnectDelayMs = 1000L
 
-    private val _connectionState = MutableStateFlow(GatewayConnectionState.DISCONNECTED)
+    private val _connectionState = MutableStateFlow<GatewayConnectionState>(GatewayConnectionState.Idle)
     val connectionState: StateFlow<GatewayConnectionState> = _connectionState.asStateFlow()
 
-    private val _connectedHost = MutableStateFlow("10.0.2.2:8000")
+    private val _connectedHost = MutableStateFlow("polylance-fv-1-45wy.onrender.com")
     val connectedHost: StateFlow<String> = _connectedHost.asStateFlow()
 
     fun buildHttpUrl(host: String, path: String): String {
-        val cleanHost = host.removePrefix("http://").removePrefix("https://").trimEnd('/')
-        val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("https://")
+        val cleanHost = host.removePrefix("http://").removePrefix("https://").removePrefix("ws://").removePrefix("wss://").trim().trimEnd('/')
+        val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("https://") || host.startsWith("wss://")
         val scheme = if (isSecure) "https" else "http"
         val cleanPath = if (path.startsWith("/")) path else "/$path"
         return "$scheme://$cleanHost$cleanPath"
     }
 
-    fun buildWsUrl(host: String, path: String, token: String? = null): String {
-        val cleanHost = host.removePrefix("ws://").removePrefix("wss://").removePrefix("http://").removePrefix("https://").trimEnd('/')
+    fun buildWsUrl(host: String, path: String): String {
+        val cleanHost = host.removePrefix("ws://").removePrefix("wss://").removePrefix("http://").removePrefix("https://").trim().trimEnd('/')
         val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("wss://") || host.startsWith("https://")
         val scheme = if (isSecure) "wss" else "ws"
         val cleanPath = if (path.startsWith("/")) path else "/$path"
-        val tokenParam = if (!token.isNullOrBlank()) "&token=$token" else ""
-        return "$scheme://$cleanHost$cleanPath?api_key=dev-local-key$tokenParam"
+        return "$scheme://$cleanHost$cleanPath?api_key=dev-local-key"
     }
 
     private suspend fun attachAuthHeaders(builder: Request.Builder): Request.Builder {
@@ -93,8 +101,9 @@ class GatewayWebSocketClient @Inject constructor(
     }
 
     fun connect() {
-        if (_connectionState.value == GatewayConnectionState.CONNECTED ||
-            _connectionState.value == GatewayConnectionState.CONNECTING) {
+        if (_connectionState.value is GatewayConnectionState.Connected ||
+            _connectionState.value is GatewayConnectionState.Connecting ||
+            _connectionState.value is GatewayConnectionState.WakingServer) {
             return
         }
 
@@ -104,33 +113,59 @@ class GatewayWebSocketClient @Inject constructor(
         }
     }
 
+    fun reconnect() {
+        scope.launch {
+            reconnectJob?.cancel()
+            reconnectDelayMs = 1000L
+            disconnect()
+            val configuredHost = sessionManager.gatewayHost.first()
+            attemptConnect(configuredHost)
+        }
+    }
+
     fun reconnectWithHost(newHost: String) {
         scope.launch {
             sessionManager.saveGatewayHost(newHost)
-            disconnect()
-            delay(500)
-            attemptConnect(newHost)
+            reconnect()
+        }
+    }
+
+    private suspend fun wakeServer(host: String): Boolean {
+        _connectionState.value = GatewayConnectionState.WakingServer
+        val healthUrl = buildHttpUrl(host, "/health")
+        Log.i(tag, "Waking gateway server via $healthUrl...")
+        return try {
+            val req = Request.Builder().url(healthUrl).get().build()
+            client.newCall(req).execute().use { resp ->
+                resp.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(tag, "Wake server probe completed with note: ${e.message}")
+            false
         }
     }
 
     private suspend fun attemptConnect(host: String) {
-        _connectionState.value = GatewayConnectionState.CONNECTING
+        // Step 1: Wake sleeping server instance (e.g. Render free tier cold start)
+        wakeServer(host)
+
+        // Step 2: Establish WebSocket stream
+        _connectionState.value = GatewayConnectionState.Connecting
         _connectedHost.value = host
 
-        val jwt = sessionManager.userJwtToken.first()
-        val wsUrl = buildWsUrl(host, "/ws/events", jwt)
-        Log.i(tag, "Connecting to live gateway: $wsUrl")
+        val wsUrl = buildWsUrl(host, "/ws/events")
+        Log.i(tag, "Opening WebSocket event stream at $wsUrl")
 
         val reqBuilder = Request.Builder().url(wsUrl)
-        if (!jwt.isNullOrBlank()) {
-            reqBuilder.header("Authorization", "Bearer $jwt")
-        }
+        attachAuthHeaders(reqBuilder)
         val request = reqBuilder.build()
 
+        webSocket?.cancel()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.i(tag, "Successfully connected to live gateway at $host")
-                _connectionState.value = GatewayConnectionState.CONNECTED
+                _connectionState.value = GatewayConnectionState.Connected
+                reconnectDelayMs = 1000L
                 reconnectJob?.cancel()
             }
 
@@ -139,16 +174,24 @@ class GatewayWebSocketClient @Inject constructor(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.w(tag, "WebSocket failure on $host: ${t.message}")
+                val code = response?.code
+                val userMsg = when {
+                    code == 404 -> "Endpoint not found"
+                    code == 401 || code == 403 -> "Session expired or unauthorized"
+                    code != null && code >= 500 -> "Server error, retrying"
+                    t is SocketTimeoutException -> "Connection timed out"
+                    else -> "Connection failed: ${t.message ?: "Server unreachable"}"
+                }
+                Log.w(tag, "WebSocket failure on $host [HTTP ${code ?: 0}]: ${t.message}")
                 this@GatewayWebSocketClient.webSocket = null
-                _connectionState.value = GatewayConnectionState.DISCONNECTED
+                _connectionState.value = GatewayConnectionState.Failed(code, userMsg)
                 scheduleReconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.i(tag, "WebSocket closed ($code): $reason")
                 this@GatewayWebSocketClient.webSocket = null
-                _connectionState.value = GatewayConnectionState.DISCONNECTED
+                _connectionState.value = GatewayConnectionState.Idle
             }
         })
     }
@@ -156,27 +199,31 @@ class GatewayWebSocketClient @Inject constructor(
     private fun scheduleReconnect() {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            delay(4000)
-            if (_connectionState.value == GatewayConnectionState.DISCONNECTED) {
-                Log.i(tag, "Attempting auto-reconnect...")
-                val current = _connectedHost.value
-                attemptConnect(current)
-            }
+            delay(reconnectDelayMs)
+            reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(30000L) // Exponential backoff: 1s, 2s, 4s... max 30s
+            val current = _connectedHost.value
+            attemptConnect(current)
         }
     }
 
     fun disconnect() {
         reconnectJob?.cancel()
-        webSocket?.close(1000, "User disconnected")
+        webSocket?.cancel()
         webSocket = null
-        _connectionState.value = GatewayConnectionState.DISCONNECTED
+        _connectionState.value = GatewayConnectionState.Idle
     }
 
-    /**
-     * Sends an actual live HTTP request to the Gateway Server.
-     * The gateway will process it, rate-limit if necessary, and broadcast
-     * the event via WebSocket back to this app in real time!
-     */
+    private fun mapHttpError(code: Int): String {
+        return when (code) {
+            404 -> "Endpoint not found"
+            401 -> "Session expired"
+            403 -> "Access unauthorized"
+            429 -> "Rate limit reached, throttling"
+            in 500..599 -> "Server error, retrying"
+            else -> "Gateway error (HTTP $code)"
+        }
+    }
+
     suspend fun sendTestRequest(endpoint: String = "/api/polylance/escrows"): Int = withContext(Dispatchers.IO) {
         val host = _connectedHost.value
         val url = buildHttpUrl(host, endpoint)
@@ -191,10 +238,6 @@ class GatewayWebSocketClient @Inject constructor(
         }
     }
 
-    /**
-     * Fires a burst of concurrent requests to trigger rate limiting and DDoS alarms
-     * against the live gateway server.
-     */
     suspend fun sendBurstSimulation(count: Int = 18, endpoint: String = "/api/polylance/escrows") = withContext(Dispatchers.IO) {
         val host = _connectedHost.value
         val url = buildHttpUrl(host, endpoint)
@@ -252,6 +295,9 @@ class GatewayWebSocketClient @Inject constructor(
                         latencyMs = latency
                     )
                 } else {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(tag, "fetchPolyLanceEscrows HTTP ${resp.code}: $bodyStr")
+                    }
                     GatewayResponse(
                         statusCode = resp.code,
                         data = null,
@@ -260,11 +306,15 @@ class GatewayWebSocketClient @Inject constructor(
                         rateLimitLimit = limit,
                         rateLimitReset = reset,
                         latencyMs = latency,
-                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                        errorMessage = mapHttpError(resp.code)
                     )
                 }
             }
         } catch (e: Exception) {
+            val userMsg = if (e is SocketTimeoutException) "Connection timed out" else "Network unreachable"
+            if (BuildConfig.DEBUG) {
+                Log.d(tag, "fetchPolyLanceEscrows exception: ${e.message}")
+            }
             GatewayResponse(
                 statusCode = -1,
                 data = null,
@@ -273,7 +323,7 @@ class GatewayWebSocketClient @Inject constructor(
                 rateLimitLimit = null,
                 rateLimitReset = null,
                 latencyMs = System.currentTimeMillis() - start,
-                errorMessage = e.message ?: "Network error"
+                errorMessage = userMsg
             )
         }
     }
@@ -315,6 +365,9 @@ class GatewayWebSocketClient @Inject constructor(
                         latencyMs = latency
                     )
                 } else {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(tag, "fetchPolyLanceAttestations HTTP ${resp.code}: $bodyStr")
+                    }
                     GatewayResponse(
                         statusCode = resp.code,
                         data = null,
@@ -323,11 +376,15 @@ class GatewayWebSocketClient @Inject constructor(
                         rateLimitLimit = limit,
                         rateLimitReset = reset,
                         latencyMs = latency,
-                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                        errorMessage = mapHttpError(resp.code)
                     )
                 }
             }
         } catch (e: Exception) {
+            val userMsg = if (e is SocketTimeoutException) "Connection timed out" else "Network unreachable"
+            if (BuildConfig.DEBUG) {
+                Log.d(tag, "fetchPolyLanceAttestations exception: ${e.message}")
+            }
             GatewayResponse(
                 statusCode = -1,
                 data = null,
@@ -336,7 +393,7 @@ class GatewayWebSocketClient @Inject constructor(
                 rateLimitLimit = null,
                 rateLimitReset = null,
                 latencyMs = System.currentTimeMillis() - start,
-                errorMessage = e.message ?: "Network error"
+                errorMessage = userMsg
             )
         }
     }
@@ -378,6 +435,9 @@ class GatewayWebSocketClient @Inject constructor(
                         latencyMs = latency
                     )
                 } else {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(tag, "fetchPolyLanceTalents HTTP ${resp.code}: $bodyStr")
+                    }
                     GatewayResponse(
                         statusCode = resp.code,
                         data = null,
@@ -386,11 +446,15 @@ class GatewayWebSocketClient @Inject constructor(
                         rateLimitLimit = limit,
                         rateLimitReset = reset,
                         latencyMs = latency,
-                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                        errorMessage = mapHttpError(resp.code)
                     )
                 }
             }
         } catch (e: Exception) {
+            val userMsg = if (e is SocketTimeoutException) "Connection timed out" else "Network unreachable"
+            if (BuildConfig.DEBUG) {
+                Log.d(tag, "fetchPolyLanceTalents exception: ${e.message}")
+            }
             GatewayResponse(
                 statusCode = -1,
                 data = null,
@@ -399,14 +463,14 @@ class GatewayWebSocketClient @Inject constructor(
                 rateLimitLimit = null,
                 rateLimitReset = null,
                 latencyMs = System.currentTimeMillis() - start,
-                errorMessage = e.message ?: "Network error"
+                errorMessage = userMsg
             )
         }
     }
 
     suspend fun createPolyLanceEscrow(
-        clientAddr: String = "0x3F9a...b210",
-        freelancerAddr: String = "0x78Ce...4a91",
+        clientAddr: String = "0x75972bcc03026544287eb7418bd8ae53583c23ce",
+        freelancerAddr: String = "0x5bab2a6561cb2dedfc95fae5cfd0779b5ab782a6",
         amountPol: Double = 500.0
     ): GatewayResponse<PolyLanceEscrow> = withContext(Dispatchers.IO) {
         val start = System.currentTimeMillis()
@@ -450,6 +514,9 @@ class GatewayWebSocketClient @Inject constructor(
                         latencyMs = latency
                     )
                 } else {
+                    if (BuildConfig.DEBUG) {
+                        Log.d(tag, "createPolyLanceEscrow HTTP ${resp.code}: $bodyStr")
+                    }
                     GatewayResponse(
                         statusCode = resp.code,
                         data = null,
@@ -458,11 +525,15 @@ class GatewayWebSocketClient @Inject constructor(
                         rateLimitLimit = limit,
                         rateLimitReset = reset,
                         latencyMs = latency,
-                        errorMessage = "HTTP ${resp.code}: $bodyStr"
+                        errorMessage = mapHttpError(resp.code)
                     )
                 }
             }
         } catch (e: Exception) {
+            val userMsg = if (e is SocketTimeoutException) "Connection timed out" else "Network unreachable"
+            if (BuildConfig.DEBUG) {
+                Log.d(tag, "createPolyLanceEscrow exception: ${e.message}")
+            }
             GatewayResponse(
                 statusCode = -1,
                 data = null,
@@ -471,7 +542,7 @@ class GatewayWebSocketClient @Inject constructor(
                 rateLimitLimit = null,
                 rateLimitReset = null,
                 latencyMs = System.currentTimeMillis() - start,
-                errorMessage = e.message ?: "Network error"
+                errorMessage = userMsg
             )
         }
     }

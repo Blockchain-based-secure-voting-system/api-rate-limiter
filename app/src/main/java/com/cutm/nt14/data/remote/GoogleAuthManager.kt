@@ -94,7 +94,7 @@ class GoogleAuthManager @Inject constructor(
                     val obj = JSONObject(body)
                     val token = obj.optString("token")
                     if (token.isNotBlank()) {
-                        Log.i(tag, "Successfully exchanged credentials for Gateway JWT: ${token.take(15)}...")
+                        Log.i(tag, "Successfully exchanged credentials for Gateway session")
                         return token
                     }
                 }
@@ -232,7 +232,7 @@ class GoogleAuthManager @Inject constructor(
             provider = "google",
             jwtToken = jwtToken
         )
-        Log.i(tag, "Direct Google session established for $email as $role with JWT: ${jwtToken.take(15)}...")
+        Log.i(tag, "Direct Google session established for $email as $role.")
         GoogleAuthUser(
             email = email,
             displayName = displayName,
