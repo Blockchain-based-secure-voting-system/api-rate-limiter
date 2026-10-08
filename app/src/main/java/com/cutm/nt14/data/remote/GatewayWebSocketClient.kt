@@ -75,12 +75,21 @@ class GatewayWebSocketClient @Inject constructor(
         return "$scheme://$cleanHost$cleanPath"
     }
 
-    fun buildWsUrl(host: String, path: String): String {
+    fun buildWsUrl(host: String, path: String, token: String? = null): String {
         val cleanHost = host.removePrefix("ws://").removePrefix("wss://").removePrefix("http://").removePrefix("https://").trimEnd('/')
         val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || host.startsWith("wss://") || host.startsWith("https://")
         val scheme = if (isSecure) "wss" else "ws"
         val cleanPath = if (path.startsWith("/")) path else "/$path"
-        return "$scheme://$cleanHost$cleanPath?api_key=dev-local-key"
+        val tokenParam = if (!token.isNullOrBlank()) "&token=$token" else ""
+        return "$scheme://$cleanHost$cleanPath?api_key=dev-local-key$tokenParam"
+    }
+
+    private suspend fun attachAuthHeaders(builder: Request.Builder): Request.Builder {
+        val jwt = sessionManager.userJwtToken.first()
+        if (!jwt.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $jwt")
+        }
+        return builder
     }
 
     fun connect() {
@@ -108,12 +117,15 @@ class GatewayWebSocketClient @Inject constructor(
         _connectionState.value = GatewayConnectionState.CONNECTING
         _connectedHost.value = host
 
-        val wsUrl = buildWsUrl(host, "/ws/events")
+        val jwt = sessionManager.userJwtToken.first()
+        val wsUrl = buildWsUrl(host, "/ws/events", jwt)
         Log.i(tag, "Connecting to live gateway: $wsUrl")
 
-        val request = Request.Builder()
-            .url(wsUrl)
-            .build()
+        val reqBuilder = Request.Builder().url(wsUrl)
+        if (!jwt.isNullOrBlank()) {
+            reqBuilder.header("Authorization", "Bearer $jwt")
+        }
+        val request = reqBuilder.build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -169,7 +181,7 @@ class GatewayWebSocketClient @Inject constructor(
         val host = _connectedHost.value
         val url = buildHttpUrl(host, endpoint)
         try {
-            val req = Request.Builder().url(url).get().build()
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
                 resp.code
             }
@@ -189,7 +201,7 @@ class GatewayWebSocketClient @Inject constructor(
         val jobs = (1..count).map {
             async {
                 try {
-                    val req = Request.Builder().url(url).get().build()
+                    val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
                     client.newCall(req).execute().use { it.code }
                 } catch (e: Exception) {
                     -1
@@ -204,7 +216,7 @@ class GatewayWebSocketClient @Inject constructor(
         val host = _connectedHost.value
         val url = buildHttpUrl(host, "/api/polylance/escrows")
         try {
-            val req = Request.Builder().url(url).get().build()
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
                 val latency = System.currentTimeMillis() - start
                 val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
@@ -271,7 +283,7 @@ class GatewayWebSocketClient @Inject constructor(
         val host = _connectedHost.value
         val url = buildHttpUrl(host, "/api/polylance/attestations")
         try {
-            val req = Request.Builder().url(url).get().build()
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
                 val latency = System.currentTimeMillis() - start
                 val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
@@ -334,7 +346,7 @@ class GatewayWebSocketClient @Inject constructor(
         val host = _connectedHost.value
         val url = buildHttpUrl(host, "/api/polylance/talents")
         try {
-            val req = Request.Builder().url(url).get().build()
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
                 val latency = System.currentTimeMillis() - start
                 val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()
@@ -408,7 +420,7 @@ class GatewayWebSocketClient @Inject constructor(
             }.toString()
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val body = jsonBody.toRequestBody(mediaType)
-            val req = Request.Builder().url(url).post(body).build()
+            val req = attachAuthHeaders(Request.Builder().url(url).post(body)).build()
             client.newCall(req).execute().use { resp ->
                 val latency = System.currentTimeMillis() - start
                 val limit = resp.header("X-RateLimit-Limit")?.toIntOrNull()

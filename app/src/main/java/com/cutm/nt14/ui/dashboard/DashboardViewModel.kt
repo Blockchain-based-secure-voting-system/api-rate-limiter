@@ -59,6 +59,7 @@ data class DashboardUiState(
     val userEmail: String? = null,
     val userName: String? = null,
     val userRole: UserRole = UserRole.VIEWER,
+    val userJwtToken: String? = null,
     val securityReport: SecurityIntegrityReport? = null
 )
 
@@ -86,6 +87,9 @@ class DashboardViewModel @Inject constructor(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null
     )
     val userPhotoUrl: StateFlow<String?> = sessionManager.userPhotoUrl.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), null
+    )
+    val userJwtToken: StateFlow<String?> = sessionManager.userJwtToken.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null
     )
 

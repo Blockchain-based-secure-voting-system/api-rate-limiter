@@ -99,3 +99,28 @@ data class PolyLanceAttestation(val attestationId: String, val developerGithub: 
 
 @Serializable
 data class PolyLanceTalent(val talentId: String, val name: String, val specialization: String, val rating: Double)
+
+@Serializable
+data class GoogleAuthRequest(
+    val idToken: String? = null,
+    val email: String? = null,
+    val displayName: String? = null,
+    val photoUrl: String? = null
+)
+
+@Serializable
+data class AuthResponse(
+    val token: String,
+    val tokenType: String = "Bearer",
+    val expiresIn: Long,
+    val user: AuthUserInfo
+)
+
+@Serializable
+data class AuthUserInfo(
+    val email: String,
+    val name: String,
+    val role: String,
+    val provider: String = "google"
+)
+

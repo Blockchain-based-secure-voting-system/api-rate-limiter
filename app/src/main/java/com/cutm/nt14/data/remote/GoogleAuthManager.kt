@@ -20,13 +20,21 @@ import com.cutm.nt14.BuildConfig
 import com.cutm.nt14.data.local.SessionManager
 import com.cutm.nt14.domain.model.UserRole
 import com.cutm.nt14.security.SecurityIntegrityChecker
+import com.cutm.nt14.util.JwtUtils
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,7 +43,8 @@ data class GoogleAuthUser(
     val displayName: String,
     val photoUrl: String? = null,
     val idToken: String? = null,
-    val googleId: String? = null
+    val googleId: String? = null,
+    val jwtToken: String? = null
 )
 
 @Singleton
@@ -45,6 +54,58 @@ class GoogleAuthManager @Inject constructor(
     private val securityChecker: SecurityIntegrityChecker
 ) {
     private val tag = "GoogleAuthManager"
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .build()
+
+    /**
+     * Exchanges Google credentials (or Google ID Token) with the Gateway /api/auth/google endpoint
+     * to obtain a cryptographically signed Gateway JWT. Falls back to client-signed JWT if offline.
+     */
+    private suspend fun exchangeOrIssueJwt(
+        idToken: String?,
+        email: String,
+        name: String,
+        role: UserRole
+    ): String {
+        return try {
+            val configuredHost = sessionManager.gatewayHost.first()
+            val cleanHost = configuredHost.removePrefix("http://").removePrefix("https://").trimEnd('/')
+            val isSecure = cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || configuredHost.startsWith("https://")
+            val scheme = if (isSecure) "https" else "http"
+            val url = "$scheme://$cleanHost/api/auth/google"
+
+            val jsonBody = JSONObject().apply {
+                if (!idToken.isNullOrBlank()) put("idToken", idToken)
+                put("email", email)
+                put("displayName", name)
+            }.toString()
+
+            val req = Request.Builder()
+                .url(url)
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    val obj = JSONObject(body)
+                    val token = obj.optString("token")
+                    if (token.isNotBlank()) {
+                        Log.i(tag, "Successfully exchanged credentials for Gateway JWT: ${token.take(15)}...")
+                        return token
+                    }
+                }
+                Log.w(tag, "Gateway JWT endpoint returned HTTP ${resp.code}, falling back to client token")
+            }
+            if (!idToken.isNullOrBlank()) idToken else JwtUtils.generateLocalClientSessionToken(email, name, role)
+        } catch (e: Exception) {
+            Log.w(tag, "Could not reach gateway /api/auth/google (${e.message}), using local JWT fallback")
+            if (!idToken.isNullOrBlank()) idToken else JwtUtils.generateLocalClientSessionToken(email, name, role)
+        }
+    }
 
     // Real-time Firebase Authentication listener flow
     val realtimeFirebaseUser: Flow<FirebaseUser?> = callbackFlow {
@@ -123,13 +184,15 @@ class GoogleAuthManager @Inject constructor(
 
             // Assign role based on authorized admin list
             val role = determineRoleForEmail(email)
+            val jwtToken = exchangeOrIssueJwt(idToken, email, name, role)
 
             sessionManager.saveSession(
                 email = email,
                 name = name,
                 role = role,
                 photoUrl = photoUrl,
-                provider = "google"
+                provider = "google",
+                jwtToken = jwtToken
             )
 
             GoogleAuthUser(
@@ -137,7 +200,8 @@ class GoogleAuthManager @Inject constructor(
                 displayName = name,
                 photoUrl = photoUrl,
                 idToken = idToken,
-                googleId = account.id
+                googleId = account.id,
+                jwtToken = jwtToken
             )
         } catch (e: ApiException) {
             Log.e(tag, "Google Sign-In API exception: code ${e.statusCode}, message: ${e.message}")
@@ -159,20 +223,23 @@ class GoogleAuthManager @Inject constructor(
      */
     suspend fun signInWithGoogleEmail(email: String, displayName: String = "Google User"): GoogleAuthUser = withContext(Dispatchers.IO) {
         val role = determineRoleForEmail(email)
+        val jwtToken = exchangeOrIssueJwt(null, email, displayName, role)
         sessionManager.saveSession(
             email = email,
             name = displayName,
             role = role,
             photoUrl = null,
-            provider = "google"
+            provider = "google",
+            jwtToken = jwtToken
         )
-        Log.i(tag, "Direct Google session established for $email as $role")
+        Log.i(tag, "Direct Google session established for $email as $role with JWT: ${jwtToken.take(15)}...")
         GoogleAuthUser(
             email = email,
             displayName = displayName,
             photoUrl = null,
             idToken = null,
-            googleId = email
+            googleId = email,
+            jwtToken = jwtToken
         )
     }
 
@@ -212,13 +279,15 @@ class GoogleAuthManager @Inject constructor(
         val idToken = googleIdTokenCredential.idToken
 
         val role = determineRoleForEmail(email)
+        val jwtToken = exchangeOrIssueJwt(idToken, email, name, role)
 
         sessionManager.saveSession(
             email = email,
             name = name,
             role = role,
             photoUrl = photoUrl,
-            provider = "google"
+            provider = "google",
+            jwtToken = jwtToken
         )
 
         GoogleAuthUser(
@@ -226,7 +295,8 @@ class GoogleAuthManager @Inject constructor(
             displayName = name,
             photoUrl = photoUrl,
             idToken = idToken,
-            googleId = googleIdTokenCredential.id
+            googleId = googleIdTokenCredential.id,
+            jwtToken = jwtToken
         )
     }
 

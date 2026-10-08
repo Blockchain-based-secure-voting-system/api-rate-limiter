@@ -336,3 +336,37 @@ flowchart TD
 | **MitM Interception Protection** | 100% Rejection | **100% Rejected** | Network Security Config (System CAs only) |
 | **Runtime Tampering Detection** | $< 100\text{ ms}$ | **$< 35\text{ ms}$** | `SecurityIntegrityCheckerTest.kt` (4/4 tests pass) |
 | **Room Database Durability** | Zero Data Loss | **WAL Mode Active** | SQLite Write-Ahead Logging verification |
+
+---
+
+## 10. Google OAuth & Cryptographic JWT Authentication Workflow
+
+For all administrative operations and user-level rate limiting, the system incorporates an RFC 7519 compliant JSON Web Token (JWT) architecture backed by Google Identity:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Google User
+    participant App as Android Client (GoogleAuthManager)
+    participant DataStore as Encrypted DataStore (SessionManager)
+    participant Gateway as Ktor Gateway Server (/api/auth/google)
+    participant Upstream as PolyLance Blockchain API
+
+    User->>App: Sign in with Google (OAuth / Credential Manager)
+    App->>App: Extract Google ID Token (OIDC JWT) & Claims
+    App->>Gateway: POST /api/auth/google { idToken, email, displayName }
+    Gateway->>Gateway: Parse & Verify OIDC Claims (sub, email, aud, exp)
+    Gateway->>Gateway: Compute RBAC Role (ADMIN if verified, else VIEWER)
+    Gateway->>Gateway: Sign Gateway Session JWT (HS256 with HMAC-SHA256)
+    Gateway-->>App: HTTP 200 OK { token: "Bearer eyJhbGciOi...", expiresIn: 86400, user: {...} }
+    App->>DataStore: Persist Session JWT & User Role
+    
+    Note over App, Gateway: Authenticated API Traffic & Identity Rate Limiting
+    App->>Gateway: GET /api/polylance/escrows (Header: Authorization: Bearer <jwt>)
+    Gateway->>Gateway: Verify JWT HMAC Signature & Expiration
+    Gateway->>Gateway: Resolve Client ID as "user:{email}" (Elevated Quota for ADMIN)
+    Gateway->>Upstream: Forward Request to Polygon Blockchain
+    Upstream-->>Gateway: Live On-Chain Escrows & Attestations
+    Gateway-->>App: HTTP 200 OK + Rate-Limit Headers (X-Authenticated-User)
+```
+

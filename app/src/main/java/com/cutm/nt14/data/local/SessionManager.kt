@@ -22,6 +22,7 @@ class SessionManager @Inject constructor(
     private val USER_ROLE = stringPreferencesKey("user_role")
     private val USER_PHOTO_URL = stringPreferencesKey("user_photo_url")
     private val AUTH_PROVIDER = stringPreferencesKey("auth_provider")
+    private val USER_JWT_TOKEN = stringPreferencesKey("user_jwt_token")
 
     val userEmail: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[USER_EMAIL]
@@ -37,6 +38,10 @@ class SessionManager @Inject constructor(
 
     val authProvider: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[AUTH_PROVIDER]
+    }
+
+    val userJwtToken: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[USER_JWT_TOKEN]
     }
 
     val userRole: Flow<UserRole> = context.dataStore.data.map { prefs ->
@@ -61,7 +66,8 @@ class SessionManager @Inject constructor(
         name: String,
         role: UserRole = UserRole.ADMIN,
         photoUrl: String? = null,
-        provider: String = "google"
+        provider: String = "google",
+        jwtToken: String? = null
     ) {
         context.dataStore.edit { prefs ->
             prefs[USER_EMAIL] = email
@@ -73,6 +79,11 @@ class SessionManager @Inject constructor(
                 prefs.remove(USER_PHOTO_URL)
             }
             prefs[AUTH_PROVIDER] = provider
+            if (jwtToken != null) {
+                prefs[USER_JWT_TOKEN] = jwtToken
+            } else {
+                prefs.remove(USER_JWT_TOKEN)
+            }
         }
     }
 

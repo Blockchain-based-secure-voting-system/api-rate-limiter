@@ -48,6 +48,7 @@ fun DashboardScreen(
     val polyLanceState by viewModel.polyLanceState.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
     val userName by viewModel.userName.collectAsState()
+    val userJwtToken by viewModel.userJwtToken.collectAsState()
     var showHostDialog by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -67,6 +68,7 @@ fun DashboardScreen(
                 uiState = uiState,
                 polyLanceState = polyLanceState,
                 userEmail = userEmail,
+                userJwtToken = userJwtToken,
                 activity = activity,
                 onLogout = onLogout,
                 onShowHostDialog = { showHostDialog = true }
@@ -78,6 +80,7 @@ fun DashboardScreen(
                 polyLanceState = polyLanceState,
                 userEmail = userEmail,
                 userName = userName,
+                userJwtToken = userJwtToken,
                 activity = activity,
                 onLogout = onLogout
             )
@@ -151,6 +154,7 @@ fun AdminDashboardContent(
     uiState: DashboardUiState,
     polyLanceState: PolyLanceInspectorUiState,
     userEmail: String?,
+    userJwtToken: String? = null,
     activity: android.app.Activity?,
     onLogout: () -> Unit,
     onShowHostDialog: () -> Unit
@@ -195,6 +199,14 @@ fun AdminDashboardContent(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = PolyPrimary
+                            )
+                        }
+                        if (!userJwtToken.isNullOrBlank()) {
+                            Text(
+                                text = "JWT: ${com.cutm.nt14.util.JwtUtils.formatTokenPreview(userJwtToken)}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF0284C7)
                             )
                         }
                     }
@@ -619,6 +631,7 @@ fun ViewerDashboardContent(
     polyLanceState: PolyLanceInspectorUiState,
     userEmail: String?,
     userName: String?,
+    userJwtToken: String? = null,
     activity: android.app.Activity?,
     onLogout: () -> Unit
 ) {
@@ -662,6 +675,14 @@ fun ViewerDashboardContent(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = PolyTextSecondary
+                        )
+                    }
+                    if (!userJwtToken.isNullOrBlank()) {
+                        Text(
+                            text = "JWT: ${com.cutm.nt14.util.JwtUtils.formatTokenPreview(userJwtToken)}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF0284C7)
                         )
                     }
                 }

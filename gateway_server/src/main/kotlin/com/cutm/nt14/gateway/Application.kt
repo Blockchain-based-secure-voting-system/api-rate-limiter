@@ -1,10 +1,13 @@
 package com.cutm.nt14.gateway
 
+import com.cutm.nt14.gateway.core.JwtService
+import com.cutm.nt14.gateway.core.RateLimitEvaluation
 import com.cutm.nt14.gateway.core.RateLimiter
 import com.cutm.nt14.gateway.core.WebSocketManager
 import com.cutm.nt14.gateway.models.ApiMessage
 import com.cutm.nt14.gateway.models.GatewayEvent
 import com.cutm.nt14.gateway.models.HealthResponse
+import com.cutm.nt14.gateway.routes.authRoutes
 import com.cutm.nt14.gateway.routes.demoRoutes
 import com.cutm.nt14.gateway.routes.eventsWebSocket
 import com.cutm.nt14.gateway.routes.ruleRoutes
@@ -24,6 +27,7 @@ import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.path
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -45,6 +49,7 @@ fun main() {
 fun Application.module() {
     val rateLimiter = RateLimiter()
     val webSocketManager = WebSocketManager()
+    val jwtService = JwtService()
 
     // 1. Content Negotiation (JSON)
     install(ContentNegotiation) {
@@ -92,13 +97,38 @@ fun Application.module() {
     intercept(ApplicationCallPipeline.Plugins) {
         val path = call.request.path()
 
-        // Apply rate limiting to demo API routes, excluding control-plane endpoints
-        if (path.startsWith("/api/") && !path.startsWith("/api/rules") && !path.startsWith("/api/simulate")) {
+        // Apply rate limiting to demo API routes, excluding control-plane and auth endpoints
+        if (path.startsWith("/api/") && !path.startsWith("/api/rules") && !path.startsWith("/api/simulate") && !path.startsWith("/api/auth")) {
             val startTime = System.currentTimeMillis()
-            val clientId = rateLimiter.resolveClientId(call)
 
-            val evaluation = rateLimiter.evaluate(path, clientId)
+            // Resolve identity from JWT Bearer token if present
+            val authHeader = call.request.headers["Authorization"]
+            val bearerToken = authHeader?.removePrefix("Bearer ")?.trim()
+                ?: call.request.queryParameters["token"]
+
+            val jwtClaims = bearerToken?.let { jwtService.verifyToken(it) }
+            val clientId = if (jwtClaims != null) "user:${jwtClaims.email}" else rateLimiter.resolveClientId(call)
+
+            // Evaluate rate limit: ADMIN role with valid JWT gets privileged headroom
+            val evaluation = if (jwtClaims?.role == "ADMIN") {
+                RateLimitEvaluation(
+                    allowed = true,
+                    limit = 1000,
+                    remaining = 999,
+                    resetSeconds = 60,
+                    retryAfterSeconds = 0,
+                    action = "ALLOW"
+                )
+            } else {
+                rateLimiter.evaluate(path, clientId)
+            }
+
             rateLimiter.appendHeaders(call, evaluation)
+
+            if (jwtClaims != null) {
+                call.response.header("X-Authenticated-User", jwtClaims.email)
+                call.response.header("X-Authenticated-Role", jwtClaims.role)
+            }
 
             if (!evaluation.allowed) {
                 val latency = System.currentTimeMillis() - startTime
@@ -117,7 +147,7 @@ fun Application.module() {
 
                 call.respond(
                     HttpStatusCode.TooManyRequests,
-                    ApiMessage("Rate limit exceeded. Action: ${evaluation.action}. Retry after ${evaluation.retryAfterSeconds}s")
+                    ApiMessage("Rate limit exceeded for $clientId. Action: ${evaluation.action}. Retry after ${evaluation.retryAfterSeconds}s")
                 )
                 finish()
                 return@intercept
@@ -156,6 +186,7 @@ fun Application.module() {
             call.respond(HealthResponse("UP", webSocketManager.activeSubscriberCount()))
         }
 
+        authRoutes(jwtService)
         demoRoutes()
         ruleRoutes(rateLimiter)
         simulateRoutes(rateLimiter, webSocketManager)

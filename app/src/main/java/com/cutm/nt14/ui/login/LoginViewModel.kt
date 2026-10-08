@@ -89,7 +89,8 @@ class LoginViewModel @Inject constructor(
             _uiState.value = LoginUiState.Loading
             val guestEmail = "guest@cutm.nt14.com"
             val guestName = "Guest Viewer"
-            sessionManager.saveSession(guestEmail, guestName, UserRole.VIEWER, provider = "guest")
+            val guestToken = com.cutm.nt14.util.JwtUtils.generateLocalClientSessionToken(guestEmail, guestName, UserRole.VIEWER)
+            sessionManager.saveSession(guestEmail, guestName, UserRole.VIEWER, provider = "guest", jwtToken = guestToken)
             _uiState.value = LoginUiState.Success(guestEmail, guestName)
         }
     }
