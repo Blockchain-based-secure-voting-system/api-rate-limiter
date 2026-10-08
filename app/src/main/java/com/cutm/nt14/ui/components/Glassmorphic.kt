@@ -207,11 +207,11 @@ fun GlassButton(
         Modifier.background(if (enabled) accentColor else accentColor.copy(alpha = 0.4f))
     } else {
         Modifier
-            .background(Color.White.copy(alpha = if (enabled) 0.90f else 0.5f))
+            .background(accentColor.copy(alpha = if (enabled) 0.08f else 0.03f))
             .border(
                 BorderStroke(
                     1.dp,
-                    if (enabled) accentColor.copy(alpha = 0.35f) else Color(0xFFE2E8F0)
+                    if (enabled) accentColor.copy(alpha = 0.30f) else Color(0xFFE2E8F0)
                 ),
                 shape
             )

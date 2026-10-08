@@ -110,7 +110,10 @@ fun ReportScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 120.dp
+                    )
                 ) {
                     items(reports) { report ->
                         val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(report.generatedAt))

@@ -124,7 +124,10 @@ fun LogScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 120.dp
+                    )
                 ) {
                     item {
                         Row(

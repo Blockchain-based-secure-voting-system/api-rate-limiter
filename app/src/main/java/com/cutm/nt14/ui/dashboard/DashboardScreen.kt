@@ -170,27 +170,31 @@ fun AdminDashboardContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Text(
                                 text = "ADMIN CONTROL CENTER",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PolyPrimary,
-                                letterSpacing = 1.5.sp
+                                fontFamily = FontFamily.SansSerif,
+                                letterSpacing = 1.2.sp
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Box(modifier = Modifier.clickable { viewModel.toggleRole() }) {
                                 GlassBadge(
-                                    text = "ADMINISTRATOR",
+                                    text = "ADMIN",
                                     color = PolyPrimary
                                 )
                             }
                         }
                         Text(
                             text = "Gateway Dashboard",
-                            fontSize = 24.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.SansSerif,
                             color = PolyTextPrimary
                         )
                         if (!userEmail.isNullOrBlank()) {
@@ -198,15 +202,8 @@ fun AdminDashboardContent(
                                 text = "Google: $userEmail",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.SansSerif,
                                 color = PolyPrimary
-                            )
-                        }
-                        if (!userJwtToken.isNullOrBlank()) {
-                            Text(
-                                text = "JWT: ${com.cutm.nt14.util.JwtUtils.formatTokenPreview(userJwtToken)}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF0284C7)
                             )
                         }
                     }
@@ -274,16 +271,40 @@ fun AdminDashboardContent(
                     .padding(padding)
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 140.dp
+                )
             ) {
                 // 1. Live Gateway Connection Banner
                 item {
-                    val isConnected = uiState.connectionState == GatewayConnectionState.CONNECTED
-                    val isConnecting = uiState.connectionState == GatewayConnectionState.CONNECTING
+                    val connState = uiState.connectionState
+                    val isConnected = connState is GatewayConnectionState.Connected
+                    val isWaking = connState is GatewayConnectionState.WakingServer
+                    val isConnecting = connState is GatewayConnectionState.Connecting
+                    val isFailed = connState is GatewayConnectionState.Failed
+
+                    val statusColor = when {
+                        isConnected -> PolySuccess
+                        isWaking -> PolyCyan
+                        isConnecting -> PolyWarning
+                        else -> PolyDanger
+                    }
+
+                    val statusTitle = when {
+                        isConnected -> "Connected to Gateway"
+                        isWaking -> "Waking server..."
+                        isConnecting -> "Connecting to Gateway..."
+                        isFailed -> "Gateway Disconnected"
+                        else -> "Gateway Offline"
+                    }
+
+                    val cleanHost = uiState.connectedHost.removePrefix("http://").removePrefix("https://").removePrefix("ws://").removePrefix("wss://").trim().trimEnd('/')
+                    val wsProtocol = if (cleanHost.contains("onrender.com") || cleanHost.contains("cloud") || uiState.connectedHost.startsWith("https://") || uiState.connectedHost.startsWith("wss://")) "wss://" else "ws://"
+                    val wsDisplayUrl = "$wsProtocol$cleanHost/ws/events"
 
                     GlassCard(
-                        backgroundColor = if (isConnected) Color.White.copy(alpha = 0.90f) else Color(0xFFFFFBEB),
-                        borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, PolyWarning.copy(alpha = 0.4f)).brush
+                        backgroundColor = if (isConnected) Color.White.copy(alpha = 0.92f) else if (isWaking) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
+                        borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, statusColor.copy(alpha = 0.45f)).brush
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -292,33 +313,25 @@ fun AdminDashboardContent(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(10.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            when {
-                                                isConnected -> PolySuccess
-                                                isConnecting -> PolyWarning
-                                                else -> PolyDanger
-                                            }
-                                        )
+                                        .background(statusColor)
                                 )
                                 Column {
                                     Text(
-                                        text = when {
-                                            isConnected -> "Connected to Gateway"
-                                            isConnecting -> "Connecting to Gateway..."
-                                            else -> "Gateway Disconnected"
-                                        },
+                                        text = statusTitle,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
-                                        color = PolyTextPrimary
+                                        color = PolyTextPrimary,
+                                        fontFamily = FontFamily.SansSerif
                                     )
                                     Text(
-                                        text = "ws://${uiState.connectedHost}/ws/events",
+                                        text = wsDisplayUrl,
                                         fontSize = 11.sp,
                                         color = PolyTextSecondary,
                                         fontFamily = FontFamily.Monospace
@@ -354,6 +367,7 @@ fun AdminDashboardContent(
                                     color = PolyPrimaryDark,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
+                                    fontFamily = FontFamily.Monospace,
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
@@ -361,6 +375,7 @@ fun AdminDashboardContent(
                                     color = PolyPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.SansSerif,
                                     modifier = Modifier
                                         .clickable { viewModel.clearActionMessage() }
                                         .padding(start = 8.dp)
@@ -373,11 +388,34 @@ fun AdminDashboardContent(
                 // Security & Anti-Tamper Card
                 item {
                     val sec = uiState.securityReport
-                    val isClean = sec != null && !sec.isCompromised
+                    val isConnected = uiState.connectionState is GatewayConnectionState.Connected
+                    val isThreat = sec != null && sec.isCompromised
+                    val isClean = isConnected && !isThreat
+
+                    val cardBg = when {
+                        !isConnected -> Color.White.copy(alpha = 0.90f)
+                        isThreat -> Color(0xFFFFF1F2)
+                        else -> Color.White.copy(alpha = 0.94f)
+                    }
+                    val cardBorder = when {
+                        !isConnected -> GlassBorderSubtle
+                        isThreat -> BorderStroke(1.5.dp, PolyDanger).brush
+                        else -> GlassBorderCobalt
+                    }
+                    val iconTint = when {
+                        !isConnected -> PolyTextSecondary
+                        isThreat -> PolyDanger
+                        else -> PolyPrimary
+                    }
+                    val statusText = when {
+                        !isConnected -> "Gateway Offline - Integrity Unknown"
+                        isThreat -> "Security Threat Detected!"
+                        else -> "Device & Network Integrity Verified"
+                    }
 
                     GlassCard(
-                        backgroundColor = if (isClean) Color.White.copy(alpha = 0.94f) else Color(0xFFFFF1F2),
-                        borderBrush = if (isClean) GlassBorderCobalt else BorderStroke(1.5.dp, PolyDanger).brush
+                        backgroundColor = cardBg,
+                        borderBrush = cardBorder
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
@@ -387,19 +425,20 @@ fun AdminDashboardContent(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape)
-                                            .background(if (isClean) PolyPrimaryLight else Color(0xFFFFE4E6)),
+                                            .background(if (!isConnected) Color(0xFFF1F5F9) else if (isClean) PolyPrimaryLight else Color(0xFFFFE4E6)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Lock,
                                             contentDescription = "Security Integrity",
-                                            tint = if (isClean) PolyPrimary else PolyDanger,
+                                            tint = iconTint,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -408,13 +447,15 @@ fun AdminDashboardContent(
                                             text = "ANTI-TAMPER & ZERO-TRUST SECURITY",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isClean) PolyPrimary else PolyDanger,
+                                            color = iconTint,
+                                            fontFamily = FontFamily.SansSerif,
                                             letterSpacing = 1.sp
                                         )
                                         Text(
-                                            text = if (isClean) "Device & Network Integrity Verified" else "Security Threat Detected!",
+                                            text = statusText,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.SansSerif,
                                             color = PolyTextPrimary
                                         )
                                     }
@@ -432,9 +473,9 @@ fun AdminDashboardContent(
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SecurityStatusRow(
                                     label = "Anti-MitM Proxy Defense",
-                                    status = if (sec?.isProxyDetected == true) "FAIL (Proxy Active)" else "PASS (Clean)",
-                                    isOk = sec?.isProxyDetected != true,
-                                    detail = if (sec?.isProxyDetected == true) sec.proxyIndicators.firstOrNull() else "System CAs enforced, User CAs rejected"
+                                    status = if (!isConnected) "UNKNOWN (Gateway Offline)" else if (sec?.isProxyDetected == true) "FAIL (Proxy Active)" else "PASS (Clean)",
+                                    isOk = isConnected && sec?.isProxyDetected != true,
+                                    detail = if (!isConnected) "Requires active gateway connection" else if (sec?.isProxyDetected == true) sec.proxyIndicators.firstOrNull() else "System CAs enforced, User CAs rejected"
                                 )
                                 SecurityStatusRow(
                                     label = "Root / Jailbreak Guard",
@@ -646,27 +687,31 @@ fun ViewerDashboardContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
                             text = "TELEMETRY OBSERVER",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = PolyPrimary,
-                            letterSpacing = 1.5.sp
+                            fontFamily = FontFamily.SansSerif,
+                            letterSpacing = 1.2.sp
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.clickable { viewModel.toggleRole() }) {
                             GlassBadge(
-                                text = "VIEWER ACCESS",
+                                text = "VIEWER",
                                 color = PolyTextSecondary
                             )
                         }
                     }
                     Text(
                         text = "Viewer Dashboard",
-                        fontSize = 24.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif,
                         color = PolyTextPrimary
                     )
                     if (!userEmail.isNullOrBlank()) {
@@ -674,15 +719,8 @@ fun ViewerDashboardContent(
                             text = "Google: $userEmail",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.SansSerif,
                             color = PolyTextSecondary
-                        )
-                    }
-                    if (!userJwtToken.isNullOrBlank()) {
-                        Text(
-                            text = "JWT: ${com.cutm.nt14.util.JwtUtils.formatTokenPreview(userJwtToken)}",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF0284C7)
                         )
                     }
                 }
@@ -716,7 +754,9 @@ fun ViewerDashboardContent(
                 .padding(padding)
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 100.dp)
+            contentPadding = PaddingValues(
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 140.dp
+            )
         ) {
             // 1. Viewer Welcome & Access Level Card
             item {
@@ -748,12 +788,14 @@ fun ViewerDashboardContent(
                                 text = "Welcome, ${userName ?: "Viewer"}",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.SansSerif,
                                 color = PolyTextPrimary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Signed in with Google ($userEmail). You have real-time read-only access to monitor gateway health, availability SLAs, and live Polygon smart contract escrows.",
                                 fontSize = 12.sp,
+                                fontFamily = FontFamily.SansSerif,
                                 color = PolyTextSecondary,
                                 lineHeight = 16.sp
                             )
@@ -772,6 +814,7 @@ fun ViewerDashboardContent(
                                     text = "Zero-Trust Active: System CAs Enforced, Anti-Proxy Protected",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
+                                    fontFamily = FontFamily.SansSerif,
                                     color = PolySuccess
                                 )
                             }
@@ -782,12 +825,30 @@ fun ViewerDashboardContent(
 
             // 2. Gateway SLA & Operational Availability Banner
             item {
-                val isConnected = uiState.connectionState == GatewayConnectionState.CONNECTED
-                val isConnecting = uiState.connectionState == GatewayConnectionState.CONNECTING
+                val connState = uiState.connectionState
+                val isConnected = connState is GatewayConnectionState.Connected
+                val isWaking = connState is GatewayConnectionState.WakingServer
+                val isConnecting = connState is GatewayConnectionState.Connecting
+                val isFailed = connState is GatewayConnectionState.Failed
+
+                val statusColor = when {
+                    isConnected -> PolySuccess
+                    isWaking -> PolyCyan
+                    isConnecting -> PolyWarning
+                    else -> PolyDanger
+                }
+
+                val statusTitle = when {
+                    isConnected -> "Gateway Operational"
+                    isWaking -> "Waking server..."
+                    isConnecting -> "Connecting to Gateway..."
+                    isFailed -> "Gateway Disconnected"
+                    else -> "Gateway Offline"
+                }
 
                 GlassCard(
-                    backgroundColor = if (isConnected) Color.White.copy(alpha = 0.90f) else Color(0xFFFFFBEB),
-                    borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, PolyWarning.copy(alpha = 0.4f)).brush
+                    backgroundColor = if (isConnected) Color.White.copy(alpha = 0.90f) else if (isWaking) Color(0xFFF0FDF4) else Color(0xFFFFFBEB),
+                    borderBrush = if (isConnected) GlassBorderSubtle else BorderStroke(1.dp, statusColor.copy(alpha = 0.45f)).brush
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -796,31 +857,28 @@ fun ViewerDashboardContent(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(10.dp)
                                     .clip(CircleShape)
-                                    .background(
-                                        when {
-                                            isConnected -> PolySuccess
-                                            isConnecting -> PolyWarning
-                                            else -> PolyDanger
-                                        }
-                                    )
+                                    .background(statusColor)
                             )
                             Column {
                                 Text(
-                                    text = if (isConnected) "Gateway Operational" else if (isConnecting) "Connecting to Gateway..." else "Gateway Offline",
+                                    text = statusTitle,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
+                                    fontFamily = FontFamily.SansSerif,
                                     color = PolyTextPrimary
                                 )
                                 Text(
-                                    text = "SLA: 99.98% availability • Sub-ms Rate Limiting",
+                                    text = if (isWaking) "Render cold start wake probe in flight..." else "SLA: 99.98% availability • Sub-ms Rate Limiting",
                                     fontSize = 11.sp,
-                                    color = PolyTextSecondary
+                                    color = PolyTextSecondary,
+                                    fontFamily = FontFamily.SansSerif
                                 )
                             }
                         }

@@ -73,7 +73,10 @@ fun RateLimitScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 120.dp
+                )
             ) {
                 item {
                     Text(
@@ -83,6 +86,44 @@ fun RateLimitScreen(
                         color = PolyTextSecondary,
                         letterSpacing = 0.8.sp
                     )
+                }
+
+                if (rules.isEmpty()) {
+                    item {
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = Color.White.copy(alpha = 0.90f),
+                            elevation = 1.dp
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp, horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = PolyTextMuted,
+                                    modifier = Modifier.size(42.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "No Rate Limiting Rules Active",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = PolyTextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Standard gateway default threshold (60 req/min) is currently active across all endpoints.",
+                                    fontSize = 12.sp,
+                                    color = PolyTextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                 }
 
                 items(rules) { rule ->

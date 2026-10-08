@@ -15,6 +15,9 @@ import com.cutm.nt14.ui.navigation.NT14NavHost
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+import androidx.activity.SystemBarStyle
+import android.graphics.Color
+
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
 
@@ -27,7 +30,10 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
 
         askNotificationPermission()
         wsClient.connect()

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -90,7 +91,10 @@ fun EndpointScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 120.dp
+                )
             ) {
                 item {
                     Row(
@@ -109,6 +113,52 @@ fun EndpointScreen(
                             text = if (isAdmin) "ADMIN ACCESS" else "VIEWER MODE",
                             color = if (isAdmin) PolyPurple else PolyPrimary
                         )
+                    }
+                }
+
+                if (endpoints.isEmpty()) {
+                    item {
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            backgroundColor = Color.White.copy(alpha = 0.90f),
+                            elevation = 1.dp
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp, horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = PolyTextMuted,
+                                    modifier = Modifier.size(42.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "No Endpoints Configured",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = PolyTextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "No routing rules registered yet. Tap below to create your first protected gateway route.",
+                                    fontSize = 12.sp,
+                                    color = PolyTextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                if (isAdmin) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    GlassButton(
+                                        text = "+ Add Endpoint",
+                                        accentColor = PolyPrimary,
+                                        onClick = { showAddDialog = true }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 

@@ -52,7 +52,7 @@ data class DashboardUiState(
     val errorRate: Float = 0f,
     val activeIncidents: Int = 0,
     val isLoading: Boolean = true,
-    val connectionState: GatewayConnectionState = GatewayConnectionState.DISCONNECTED,
+    val connectionState: GatewayConnectionState = GatewayConnectionState.Idle,
     val connectedHost: String = "10.0.2.2:8000",
     val recentLogs: List<RequestLog> = emptyList(),
     val actionMessage: String? = null,
@@ -163,7 +163,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun reconnect() {
-        wsClient.connect()
+        wsClient.reconnect()
     }
 
     fun updateGatewayHost(newHost: String) {
