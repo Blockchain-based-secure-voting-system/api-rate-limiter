@@ -63,10 +63,10 @@ fun Route.authRoutes(jwtService: JwtService) {
                 val finalName = name ?: "Google User"
                 val finalSub = sub ?: finalEmail
 
-                // Determine role (ADMIN for verified administrative accounts)
-                val role = if (finalEmail == "akpolylance@gmail.com" ||
-                    finalEmail.contains("admin") ||
-                    finalEmail.contains("akhil")) {
+                // Determine role: strictly check against authorized administrator emails (prevent privilege escalation)
+                val adminEmailsEnv = System.getenv("ADMIN_EMAILS") ?: "akpolylance@gmail.com"
+                val adminEmails = adminEmailsEnv.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+                val role = if (adminEmails.contains(finalEmail)) {
                     "ADMIN"
                 } else {
                     "VIEWER"

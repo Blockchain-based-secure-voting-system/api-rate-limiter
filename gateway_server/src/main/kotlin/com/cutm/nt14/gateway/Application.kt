@@ -61,30 +61,31 @@ fun Application.module() {
         })
     }
 
-    // 2. WebSockets
+    // 2. WebSockets (hardened frame size to 64KB)
     install(WebSockets) {
-        maxFrameSize = Long.MAX_VALUE
+        maxFrameSize = 65536L
         masking = false
     }
 
     // 3. Call Logging
     install(CallLogging)
 
-    // 4. Decision 4b: Control-plane Authentication Plugin
+    // 4. Control-plane Authentication Plugin
     install(Authentication) {
         provider("api-key") {
             authenticate { context ->
+                val expectedApiKey = System.getenv("GATEWAY_API_KEY") ?: "dev-local-key"
                 val apiKeyHeader = context.call.request.headers["X-API-Key"]
                 val apiKeyQuery = context.call.request.queryParameters["api_key"]
                 val key = apiKeyHeader ?: apiKeyQuery
 
-                if (key == "dev-local-key") {
-                    context.principal(ApiKeyPrincipal("dev-local-key"))
+                if (key == expectedApiKey) {
+                    context.principal(ApiKeyPrincipal(expectedApiKey))
                 } else {
                     context.challenge("api-key", AuthenticationFailedCause.InvalidCredentials) { challenge, call ->
                         call.respond(
                             HttpStatusCode.Unauthorized,
-                            ApiMessage("Unauthorized: Invalid or missing API Key. Use X-API-Key header or ?api_key=dev-local-key")
+                            ApiMessage("Unauthorized: Invalid or missing API Key. Provide via X-API-Key header.")
                         )
                         challenge.complete()
                     }

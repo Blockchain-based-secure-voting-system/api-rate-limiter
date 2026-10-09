@@ -20,7 +20,8 @@ fun Route.eventsWebSocket(webSocketManager: WebSocketManager) {
         val apiKeyHeader = call.request.headers["X-API-Key"]
         val key = apiKeyQuery ?: apiKeyHeader
 
-        if (key != "dev-local-key") {
+        val expectedKey = System.getenv("GATEWAY_API_KEY") ?: "dev-local-key"
+        if (key != expectedKey) {
             logger.warn("Rejected unauthorized WebSocket connection attempt.")
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Unauthorized: Invalid or missing API key"))
             return@webSocket

@@ -36,7 +36,8 @@ data class RateLimitEvaluation(
 
 private class ClientLimiterPair(
     val tokenBucket: TokenBucket,
-    val slidingWindow: SlidingWindow
+    val slidingWindow: SlidingWindow,
+    @Volatile var lastAccessTime: Long = System.currentTimeMillis()
 ) {
     val lock = Mutex()
 }
@@ -77,18 +78,38 @@ class RateLimiter {
     }
 
     /**
+     * Evicts client rate limiter instances that have been idle longer than maxIdleMillis (default 10 minutes).
+     * Prevents memory exhaustion from long-lived server runs with rotating client IPs.
+     */
+    fun cleanupIdleLimiters(maxIdleMillis: Long = 600_000L): Int {
+        val now = System.currentTimeMillis()
+        val toRemove = limiters.filter { (_, pair) -> (now - pair.lastAccessTime) > maxIdleMillis }.keys
+        toRemove.forEach { limiters.remove(it) }
+        return toRemove.size
+    }
+
+    /**
      * Resolves the client identity from headers or remote network address.
+     * Prevents header spoofing by only honoring X-Forwarded-For if the immediate peer is a trusted proxy.
      */
     fun resolveClientId(call: ApplicationCall): String {
-        val forwarded = call.request.headers["X-Forwarded-For"]
-        if (!forwarded.isNullOrBlank()) {
-            return forwarded.split(",").first().trim()
+        val remoteIp = call.request.origin.remoteHost
+        val trustedProxiesEnv = System.getenv("TRUSTED_PROXIES") ?: "127.0.0.1,::1,localhost"
+        val trustedProxies = trustedProxiesEnv.split(",").map { it.trim() }.toSet()
+
+        val isDirectProxy = trustedProxies.contains(remoteIp) || remoteIp == "127.0.0.1" || remoteIp == "0:0:0:0:0:0:0:1"
+        if (isDirectProxy) {
+            val forwarded = call.request.headers["X-Forwarded-For"]
+            if (!forwarded.isNullOrBlank()) {
+                return forwarded.split(",").first().trim()
+            }
         }
+
         val clientKey = call.request.headers["X-Client-ID"]
         if (!clientKey.isNullOrBlank()) {
             return clientKey.trim()
         }
-        return call.request.origin.remoteHost
+        return remoteIp
     }
 
     /**
@@ -118,6 +139,7 @@ class RateLimiter {
         }
 
         return pair.lock.withLock {
+            pair.lastAccessTime = System.currentTimeMillis()
             // First check TokenBucket (burst ceiling)
             val tbResult = pair.tokenBucket.allow(1.0)
             if (!tbResult.allowed) {

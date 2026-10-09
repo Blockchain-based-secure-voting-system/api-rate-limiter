@@ -326,9 +326,8 @@ class GoogleAuthManager @Inject constructor(
     companion object {
         fun determineRoleForEmail(email: String): UserRole {
             val normalized = email.trim().lowercase()
-            return if (normalized == "akpolylance@gmail.com" ||
-                normalized.contains("admin") ||
-                normalized.contains("akhil")) {
+            val adminEmails = setOf("akpolylance@gmail.com")
+            return if (adminEmails.contains(normalized)) {
                 UserRole.ADMIN
             } else {
                 UserRole.VIEWER

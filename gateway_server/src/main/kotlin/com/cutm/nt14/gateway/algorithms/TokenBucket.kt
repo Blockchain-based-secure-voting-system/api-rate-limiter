@@ -42,7 +42,7 @@ class TokenBucket(
         refillUnlocked(now)
 
         if (tokens >= tokensNeeded) {
-            tokens -= tokensNeeded
+            tokens = (tokens - tokensNeeded).coerceAtMost(capacity)
             TokenBucketResult(
                 allowed = true,
                 remainingTokens = tokens,

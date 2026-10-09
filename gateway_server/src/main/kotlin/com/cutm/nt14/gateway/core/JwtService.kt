@@ -109,7 +109,7 @@ class JwtService(
     /**
      * Parses and extracts claims from an incoming Google OAuth OpenID Connect ID Token (JWT).
      */
-    fun parseGoogleIdToken(idToken: String): GoogleTokenPayload? {
+    fun parseGoogleIdToken(idToken: String, expectedAudience: String? = System.getenv("GOOGLE_CLIENT_ID")): GoogleTokenPayload? {
         val parts = idToken.trim().split(".")
         if (parts.size < 2) return null
 
@@ -126,9 +126,21 @@ class JwtService(
             val iss = obj["iss"]?.jsonPrimitive?.content ?: ""
             val aud = obj["aud"]?.jsonPrimitive?.content
 
+            // 1. Verify issuer is Google accounts
+            val validIssuers = setOf("https://accounts.google.com", "accounts.google.com")
+            if (iss.isNotBlank() && !validIssuers.contains(iss)) {
+                return null
+            }
+
+            // 2. Verify token expiration
             val now = System.currentTimeMillis() / 1000
             if (exp > 0 && exp < now) {
                 return null // Google token expired
+            }
+
+            // 3. Verify audience if configured
+            if (!expectedAudience.isNullOrBlank() && aud != expectedAudience) {
+                return null
             }
 
             GoogleTokenPayload(
