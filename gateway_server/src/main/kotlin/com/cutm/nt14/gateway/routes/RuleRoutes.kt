@@ -44,5 +44,23 @@ fun Route.ruleRoutes(rateLimiter: RateLimiter) {
                 }
             }
         }
+
+        route("/api/bans") {
+            // GET /api/bans -> list all active anomaly bans
+            get {
+                call.respond(rateLimiter.anomalyDetector.getActiveBans())
+            }
+
+            // DELETE /api/bans/{clientId...} -> lift an active anomaly ban
+            delete("{clientId...}") {
+                val clientId = call.parameters.getAll("clientId")?.joinToString("/") ?: ""
+                val unbanned = rateLimiter.anomalyDetector.unbanClient(clientId)
+                if (unbanned) {
+                    call.respond(ApiMessage("Ban lifted for $clientId"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, ApiMessage("No active ban found for $clientId"))
+                }
+            }
+        }
     }
 }

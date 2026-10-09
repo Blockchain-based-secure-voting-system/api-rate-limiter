@@ -32,6 +32,11 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
+import com.cutm.nt14.gateway.core.PolyLanceUpstream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -50,6 +55,7 @@ fun Application.module() {
     val rateLimiter = RateLimiter()
     val webSocketManager = WebSocketManager()
     val jwtService = JwtService()
+    val polyLanceUpstream = PolyLanceUpstream()
 
     // 1. Content Negotiation (JSON)
     install(ContentNegotiation) {
@@ -146,6 +152,8 @@ fun Application.module() {
                     )
                 )
 
+                rateLimiter.anomalyDetector.recordAndInspect(clientId, path, 429, webSocketManager)
+
                 call.respond(
                     HttpStatusCode.TooManyRequests,
                     ApiMessage("Rate limit exceeded for $clientId. Action: ${evaluation.action}. Retry after ${evaluation.retryAfterSeconds}s")
@@ -160,6 +168,8 @@ fun Application.module() {
             // After execution: emit telemetry for successful call
             val latency = System.currentTimeMillis() - startTime
             val status = call.response.status()?.value ?: 200
+
+            rateLimiter.anomalyDetector.recordAndInspect(clientId, path, status, webSocketManager)
 
             webSocketManager.broadcast(
                 GatewayEvent(
@@ -192,5 +202,24 @@ fun Application.module() {
         ruleRoutes(rateLimiter)
         simulateRoutes(rateLimiter, webSocketManager)
         eventsWebSocket(webSocketManager)
+    }
+
+    // 7. Background Autonomous Maintenance & Upstream Keep-Alive Loop
+    launch(Dispatchers.Default) {
+        var cycle = 0
+        while (isActive) {
+            delay(30_000L) // Runs every 30 seconds
+            cycle++
+            try {
+                // Periodically prune idle rate limiters and expired anomaly bans
+                rateLimiter.cleanupIdleLimiters()
+
+                // Every 2 minutes (every 4 cycles), keep upstream PolyLance warm
+                if (cycle % 4 == 0) {
+                    polyLanceUpstream.keepAlive()
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 }

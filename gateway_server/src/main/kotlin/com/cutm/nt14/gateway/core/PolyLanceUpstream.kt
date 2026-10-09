@@ -61,6 +61,19 @@ class PolyLanceUpstream(
         return json.parseToJsonElement(body)
     }
 
+    /**
+     * Periodic health probe to keep Render upstream instance warm and prevent cold-start sleeps.
+     */
+    suspend fun keepAlive(): Boolean {
+        return try {
+            val resp = client.get("$baseUrl/health")
+            resp.status.isSuccess()
+        } catch (e: Exception) {
+            logger.debug("PolyLance keepAlive notice: ${e.message}")
+            false
+        }
+    }
+
     /** Live escrow jobs from PolyLance `/api/jobs`. */
     suspend fun fetchEscrows(): List<PolyLanceEscrow> {
         val root = fetchJson("/api/jobs").jsonObject

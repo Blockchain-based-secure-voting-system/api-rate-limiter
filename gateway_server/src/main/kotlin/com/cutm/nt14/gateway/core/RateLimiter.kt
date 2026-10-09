@@ -77,6 +77,8 @@ class RateLimiter {
         return removed
     }
 
+    val anomalyDetector = AnomalyDetector()
+
     /**
      * Evicts client rate limiter instances that have been idle longer than maxIdleMillis (default 10 minutes).
      * Prevents memory exhaustion from long-lived server runs with rotating client IPs.
@@ -85,6 +87,7 @@ class RateLimiter {
         val now = System.currentTimeMillis()
         val toRemove = limiters.filter { (_, pair) -> (now - pair.lastAccessTime) > maxIdleMillis }.keys
         toRemove.forEach { limiters.remove(it) }
+        anomalyDetector.cleanupExpired()
         return toRemove.size
     }
 
@@ -117,6 +120,20 @@ class RateLimiter {
      * Implements Decision 4a (AND combination semantics).
      */
     suspend fun evaluate(endpoint: String, clientId: String): RateLimitEvaluation {
+        // Enforce active anomaly ban if present
+        val ban = anomalyDetector.checkBan(clientId)
+        if (ban != null) {
+            val remainingSec = ceil((ban.bannedUntil - System.currentTimeMillis()) / 1000.0).toLong().coerceAtLeast(1L)
+            return RateLimitEvaluation(
+                allowed = false,
+                limit = 0,
+                remaining = 0,
+                resetSeconds = remainingSec,
+                retryAfterSeconds = remainingSec,
+                action = "BLOCK"
+            )
+        }
+
         val rule = rules[endpoint] ?: RateLimitRule(
             endpointId = endpoint,
             limitPerMin = 100,
