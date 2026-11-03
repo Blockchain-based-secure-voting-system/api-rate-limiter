@@ -1,0 +1,29 @@
+databases:
+  - name: nt14-gateway-db
+    databaseName: nt14_gateway
+    user: nt14_gateway_user
+    plan: free
+
+services:
+  - type: web
+    name: api-rate-limiter-gateway
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nt14-gateway-db
+          property: connectionString
+      - key: DEMO_TRAFFIC
+        value: "false"
+      - key: IP_HASH_SALT
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GATEWAY_API_KEY
+        generateValue: true
+      - key: ADMIN_EMAILS
+        value: "akpolylance@gmail.com"
+      - key: POLYLANCE_BASE_URL
+        value: "https://polylance-fv-1-45wy.onrender.com"
