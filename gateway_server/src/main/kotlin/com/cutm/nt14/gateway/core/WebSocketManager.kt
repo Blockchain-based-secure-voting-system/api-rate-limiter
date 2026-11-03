@@ -32,6 +32,56 @@ class WebSocketManager {
     var historyManager: TrafficHistoryManager? = null
     var rateLimiter: RateLimiter? = null
     var clientTracker: ClientTracker? = null
+    var persistence: com.cutm.nt14.gateway.db.Persistence? = null
+
+    fun buildCurrentSnapshot(isAdmin: Boolean = false): GatewayEvent {
+        val db = persistence
+        if (db != null) {
+            runCatching { db.writer.flushNow() }
+            val rules = runCatching { db.rules.all() }.getOrElse { rateLimiter?.getAllRules() ?: emptyList() }
+            val bans = runCatching {
+                db.bans.active().map { ActiveBanDto(clientId = it.clientKey, reason = it.reason, expiresAt = it.expiresAt) }
+            }.getOrElse {
+                rateLimiter?.anomalyDetector?.getActiveBans()?.map { (ip, r) ->
+                    ActiveBanDto(clientId = ip, reason = r.reason, expiresAt = r.bannedUntil)
+                } ?: emptyList()
+            }
+            val logs = runCatching { db.logs.page(com.cutm.nt14.gateway.db.LogQuery(limit = 200)).items }
+                .getOrElse { historyManager?.getRecentLogs(200) ?: emptyList() }
+            val incidents = runCatching { db.incidents.recent(50) }
+                .getOrElse { historyManager?.getIncidents() ?: emptyList() }
+            val targets = runCatching { db.monitor.statusAll() }.getOrDefault(emptyList())
+            val clients = clientTracker?.getAllClients(isAdmin, rateLimiter?.anomalyDetector) ?: emptyList()
+            val metrics = historyManager?.calculateCurrentMetrics() ?: GatewayMetrics()
+            return GatewayEvent(
+                type = "snapshot",
+                metrics = metrics,
+                rules = rules,
+                activeBans = bans,
+                logs = logs,
+                incidents = incidents,
+                clients = clients,
+                targets = targets,
+                persistence = "postgres",
+                snapshotFrom = "db"
+            )
+        }
+        val rules = rateLimiter?.getAllRules() ?: emptyList()
+        val bans = rateLimiter?.anomalyDetector?.getActiveBans()?.map { (ip, record) ->
+            ActiveBanDto(clientId = ip, reason = record.reason, expiresAt = record.bannedUntil)
+        } ?: emptyList()
+        val clients = clientTracker?.getAllClients(isAdmin, rateLimiter?.anomalyDetector) ?: emptyList()
+        val base = historyManager?.buildSnapshot(rules, bans, clients) ?: GatewayEvent(
+            type = "snapshot",
+            metrics = GatewayMetrics(),
+            rules = rules,
+            activeBans = bans,
+            logs = emptyList(),
+            incidents = emptyList(),
+            clients = clients
+        )
+        return base.copy(persistence = "memory", snapshotFrom = "memory")
+    }
 
     fun register(session: DefaultWebSocketServerSession, lastEventId: String? = null, isAdmin: Boolean = false) {
         sessions.add(session)
@@ -40,6 +90,7 @@ class WebSocketManager {
         // Immediately send initial snapshot or replay events from lastEventId
         scope.launch {
             try {
+                val db = persistence
                 val rules = rateLimiter?.getAllRules() ?: emptyList()
                 val bans = rateLimiter?.anomalyDetector?.getActiveBans()?.map { (ip, record) ->
                     ActiveBanDto(clientId = ip, reason = record.reason, expiresAt = record.bannedUntil)
@@ -47,7 +98,12 @@ class WebSocketManager {
                 val clients = clientTracker?.getAllClients(isAdmin, rateLimiter?.anomalyDetector) ?: emptyList()
 
                 val missedLogs = if (!lastEventId.isNullOrBlank()) {
-                    historyManager?.getLogsSince(lastEventId)
+                    val lastIdNum = lastEventId.toLongOrNull()
+                    if (db != null && lastIdNum != null) {
+                        runCatching { db.writer.flushNow(); db.logs.since(lastIdNum) }.getOrNull()
+                    } else {
+                        historyManager?.getLogsSince(lastEventId)
+                    }
                 } else null
 
                 if (missedLogs != null) {
@@ -61,6 +117,8 @@ class WebSocketManager {
                             status = log.status,
                             latencyMs = log.latencyMs,
                             decision = log.decision,
+                            source = log.source,
+                            upstream = log.upstream,
                             timestamp = log.timestamp / 1000.0
                         )
                         session.send(Frame.Text(json.encodeToString(replayEvent)))
@@ -70,22 +128,15 @@ class WebSocketManager {
                         metrics = historyManager?.calculateCurrentMetrics() ?: GatewayMetrics(),
                         rules = rules,
                         activeBans = bans,
-                        clients = clients
+                        clients = clients,
+                        targets = db?.let { runCatching { it.monitor.statusAll() }.getOrNull() }
                     )
                     session.send(Frame.Text(json.encodeToString(metricsEvent)))
                     logger.debug("Replayed ${missedLogs.size} events to resumed client since $lastEventId")
                 } else {
-                    val snapshot = historyManager?.buildSnapshot(rules, bans, clients) ?: GatewayEvent(
-                        type = "snapshot",
-                        metrics = GatewayMetrics(),
-                        rules = rules,
-                        activeBans = bans,
-                        logs = emptyList(),
-                        incidents = emptyList(),
-                        clients = clients
-                    )
+                    val snapshot = buildCurrentSnapshot(isAdmin)
                     session.send(Frame.Text(json.encodeToString(snapshot)))
-                    logger.debug("Sent initial state snapshot to new subscriber")
+                    logger.debug("Sent initial state snapshot to new subscriber (from=${snapshot.snapshotFrom})")
                 }
             } catch (e: Exception) {
                 logger.warn("Failed to initialize subscriber session: ${e.message}")

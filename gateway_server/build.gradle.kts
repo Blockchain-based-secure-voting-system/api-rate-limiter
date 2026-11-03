@@ -36,8 +36,15 @@ dependencies {
     implementation("com.google.api-client:google-api-client:2.7.0")
     implementation("com.google.http-client:google-http-client-gson:1.45.0")
 
+    // Persistence: PostgreSQL + HikariCP pool + Flyway migrations (plain JDBC, no ORM)
+    implementation("org.postgresql:postgresql:42.7.4")
+    implementation("com.zaxxer:HikariCP:5.1.0")
+    implementation("org.flywaydb:flyway-core:9.22.3")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
+    // Real PostgreSQL binaries for tests (no Docker needed)
+    testImplementation("io.zonky.test:embedded-postgres:2.0.7")
     testImplementation("io.ktor:ktor-server-tests-jvm:$ktorVersion")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }
@@ -48,6 +55,22 @@ application {
 
 tasks.test {
     useJUnit()
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// Local evidence helpers (test classpath): a real embedded PostgreSQL and a SQL runner.
+tasks.register<JavaExec>("localPostgres") {
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.cutm.nt14.gateway.tools.LocalPostgresKt")
+}
+tasks.register<JavaExec>("dbQuery") {
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.cutm.nt14.gateway.tools.DbQueryKt")
+    args = (project.findProperty("sql") as String?)?.let { listOf(it) } ?: emptyList()
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

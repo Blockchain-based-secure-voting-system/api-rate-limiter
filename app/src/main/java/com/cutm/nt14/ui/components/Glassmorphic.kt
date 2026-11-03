@@ -7,8 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -200,35 +202,23 @@ fun GlassButton(
     accentColor: Color = PolyPrimary,
     isFilled: Boolean = false,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(14.dp),
+    shape: Shape = RoundedCornerShape(12.dp),
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
-    val bgModifier = if (isFilled) {
-        Modifier.background(if (enabled) accentColor else accentColor.copy(alpha = 0.4f))
-    } else {
-        Modifier
-            .background(accentColor.copy(alpha = if (enabled) 0.08f else 0.03f))
-            .border(
-                BorderStroke(
-                    1.dp,
-                    if (enabled) accentColor.copy(alpha = 0.30f) else Color(0xFFE2E8F0)
-                ),
-                shape
-            )
-    }
+    val containerColor = if (isFilled) accentColor else Color(0xFFEEF2F8)
+    val contentColor = if (isFilled) Color.White else if (enabled) Nt14Ui.TextPrimary else Nt14Ui.TextMuted
+    val borderStroke = if (isFilled) null else BorderStroke(1.dp, Nt14Ui.Outline)
 
-    val textColor = if (isFilled) Color.White else if (enabled) accentColor else PolyTextMuted
-
-    Box(
-        modifier = modifier
-            .shadow(if (isFilled) 3.dp else 1.dp, shape, ambientColor = Color(0x080F172A))
-            .clip(shape)
-            .then(bgModifier)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 11.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = shape,
+        color = containerColor,
+        border = borderStroke
     ) {
         Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -238,10 +228,10 @@ fun GlassButton(
             }
             Text(
                 text = text,
-                color = textColor,
+                color = contentColor,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                letterSpacing = 0.2.sp
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 14.sp
             )
         }
     }

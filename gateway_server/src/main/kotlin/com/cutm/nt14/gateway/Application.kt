@@ -7,9 +7,12 @@ import com.cutm.nt14.gateway.core.RateLimitEvaluation
 import com.cutm.nt14.gateway.core.RateLimiter
 import com.cutm.nt14.gateway.core.TrafficHistoryManager
 import com.cutm.nt14.gateway.core.WebSocketManager
+import com.cutm.nt14.gateway.db.GatewayDatabase
+import com.cutm.nt14.gateway.db.Persistence
 import com.cutm.nt14.gateway.models.ApiMessage
 import com.cutm.nt14.gateway.models.GatewayEvent
 import com.cutm.nt14.gateway.models.HealthResponse
+import com.cutm.nt14.gateway.models.PersistenceStatus
 import com.cutm.nt14.gateway.routes.authRoutes
 import com.cutm.nt14.gateway.routes.demoRoutes
 import com.cutm.nt14.gateway.routes.eventsWebSocket
@@ -19,6 +22,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -54,18 +58,40 @@ fun main() {
         .start(wait = true)
 }
 
-fun Application.module() {
+fun Application.module() = module(customDatabase = null, startBackgroundMonitor = true)
+
+fun Application.module(
+    customDatabase: GatewayDatabase? = null,
+    startBackgroundMonitor: Boolean = true,
+    customUpstream: PolyLanceUpstream? = null,
+    customJwtService: JwtService? = null
+) {
     val rateLimiter = RateLimiter()
     val webSocketManager = WebSocketManager()
     val historyManager = TrafficHistoryManager()
     val clientTracker = ClientTracker()
-    val jwtService = JwtService()
-    val polyLanceUpstream = PolyLanceUpstream()
+    val jwtService = customJwtService ?: JwtService()
+    val polyLanceUpstream = customUpstream ?: PolyLanceUpstream()
     val serverStartTime = System.currentTimeMillis()
 
     webSocketManager.historyManager = historyManager
     webSocketManager.rateLimiter = rateLimiter
     webSocketManager.clientTracker = clientTracker
+
+    // Initialize PostgreSQL + Flyway migrations when DATABASE_URL is configured (or passed by tests)
+    val db = customDatabase ?: runCatching { GatewayDatabase.fromEnv() }
+        .onFailure { LoggerFactory.getLogger("GatewayServer").error("Failed to parse DATABASE_URL: ${it.message}", it) }
+        .getOrNull()
+    val persistence: Persistence? = db?.let { database ->
+        database.migrate()
+        Persistence(database).also { p ->
+            p.attach(rateLimiter, historyManager, webSocketManager)
+            p.start(this, startMonitor = startBackgroundMonitor)
+            environment.monitor.subscribe(ApplicationStopped) {
+                p.shutdown(closePool = customDatabase == null)
+            }
+        }
+    }
 
     val initAdminTicket = jwtService.createWsTicket(role = "ADMIN", email = "admin@cutm.nt14.com", durationSeconds = 86400L)
     LoggerFactory.getLogger("GatewayServer").info(
@@ -135,7 +161,13 @@ fun Application.module() {
                 path.startsWith("/api/stats") ||
                 path.startsWith("/api/logs") ||
                 path.startsWith("/api/bans") ||
-                path.startsWith("/api/reports")
+                path.startsWith("/api/reports") ||
+                path.startsWith("/api/metrics") ||
+                path.startsWith("/api/targets") ||
+                path.startsWith("/api/export") ||
+                path.startsWith("/api/incidents") ||
+                path.startsWith("/api/clients") ||
+                path.startsWith("/api/whoami")
 
         if (path.startsWith("/api/") && !isControlPlane) {
             val startTime = System.currentTimeMillis()
@@ -146,7 +178,8 @@ fun Application.module() {
                 ?: call.request.queryParameters["token"]
 
             val jwtClaims = bearerToken?.let { jwtService.verifyToken(it) }
-            val clientId = if (jwtClaims != null) "user:${jwtClaims.email}" else rateLimiter.resolveClientId(call)
+            val rawClientIp = rateLimiter.resolveClientId(call)
+            val clientId = if (jwtClaims != null) "user:${jwtClaims.email}" else rawClientIp
 
             // Evaluate rate limit: ADMIN role with valid JWT gets privileged headroom
             val evaluation = if (jwtClaims?.role == "ADMIN") {
@@ -169,9 +202,12 @@ fun Application.module() {
                 call.response.header("X-Authenticated-Role", jwtClaims.role)
             }
 
-            val isDemo = path.contains("simulate") ||
+            val isDemo = call.request.headers["X-Traffic-Source"]?.equals("demo", ignoreCase = true) == true ||
+                path.contains("simulate") ||
                 clientId.startsWith("demo:") ||
                 clientId in listOf("192.168.1.10", "192.168.1.25", "10.0.0.5", "198.51.100.42", "203.0.113.19")
+            val sourceTag = if (isDemo) "demo" else "real"
+            val upstreamUrl = polyLanceUpstream.upstreamUrlFor(path)
             clientTracker.recordRequest(clientId, isThrottled = !evaluation.allowed, isDemo = isDemo)
 
             if (!evaluation.allowed) {
@@ -185,19 +221,24 @@ fun Application.module() {
                     path = path,
                     status = 429,
                     latencyMs = latency,
-                    decision = decision
+                    decision = decision,
+                    source = sourceTag,
+                    upstream = upstreamUrl,
+                    clientIp = rawClientIp
                 )
 
                 webSocketManager.broadcast(
                     GatewayEvent(
                         type = eventType,
                         id = log.id,
-                        ip = clientId,
+                        ip = log.clientId,
                         endpoint = path,
                         method = call.request.httpMethod.value,
                         status = 429,
                         latencyMs = latency,
                         decision = decision,
+                        source = sourceTag,
+                        upstream = upstreamUrl,
                         timestamp = System.currentTimeMillis() / 1000.0
                     )
                 )
@@ -207,13 +248,13 @@ fun Application.module() {
                     historyManager.recordIncident(
                         type = "Anomaly Ban Triggered",
                         severity = "HIGH",
-                        detail = "Client $clientId exceeded threshold on $path: ${ban.reason}"
+                        detail = "Client ${log.clientId} exceeded threshold on $path: ${ban.reason}"
                     )
                 }
 
                 call.respond(
                     HttpStatusCode.TooManyRequests,
-                    ApiMessage("Rate limit exceeded for $clientId. Action: ${evaluation.action}. Retry after ${evaluation.retryAfterSeconds}s")
+                    ApiMessage("Rate limit exceeded for ${log.clientId}. Action: ${evaluation.action}. Retry after ${evaluation.retryAfterSeconds}s")
                 )
                 finish()
                 return@intercept
@@ -232,7 +273,10 @@ fun Application.module() {
                 path = path,
                 status = status,
                 latencyMs = latency,
-                decision = "allowed"
+                decision = "allowed",
+                source = sourceTag,
+                upstream = upstreamUrl,
+                clientIp = rawClientIp
             )
 
             rateLimiter.anomalyDetector.recordAndInspect(clientId, path, status, webSocketManager)
@@ -241,12 +285,14 @@ fun Application.module() {
                 GatewayEvent(
                     type = "request",
                     id = log.id,
-                    ip = clientId,
+                    ip = log.clientId,
                     endpoint = path,
                     method = call.request.httpMethod.value,
                     status = status,
                     latencyMs = latency,
                     decision = "allowed",
+                    source = sourceTag,
+                    upstream = upstreamUrl,
                     timestamp = System.currentTimeMillis() / 1000.0
                 )
             )
@@ -255,6 +301,8 @@ fun Application.module() {
 
         proceed()
     }
+
+    val isDemoTrafficEnabled = System.getenv("DEMO_TRAFFIC")?.toBooleanStrictOrNull() ?: false
 
     // 6. Routing Assembly
     routing {
@@ -267,14 +315,17 @@ fun Application.module() {
                 HealthResponse(
                     status = "UP",
                     subscribers = webSocketManager.activeSubscriberCount(),
-                    uptimeMs = System.currentTimeMillis() - serverStartTime
+                    uptimeMs = System.currentTimeMillis() - serverStartTime,
+                    metrics = historyManager.calculateCurrentMetrics(),
+                    persistence = persistence?.status() ?: PersistenceStatus(mode = "memory"),
+                    demoTraffic = isDemoTrafficEnabled
                 )
             )
         }
 
         authRoutes(jwtService)
-        demoRoutes()
-        ruleRoutes(rateLimiter, webSocketManager, historyManager, jwtService, serverStartTime, clientTracker)
+        demoRoutes(polyLanceUpstream)
+        ruleRoutes(rateLimiter, webSocketManager, historyManager, jwtService, serverStartTime, clientTracker, persistence)
         simulateRoutes(rateLimiter, webSocketManager, historyManager, jwtService)
         eventsWebSocket(webSocketManager, jwtService)
     }
@@ -288,7 +339,7 @@ fun Application.module() {
             try {
                 rateLimiter.cleanupIdleLimiters()
                 clientTracker.cleanExpired()
-                if (cycle % 4 == 0) {
+                if (cycle % 4 == 0 && startBackgroundMonitor) {
                     polyLanceUpstream.keepAlive()
                 }
             } catch (_: Exception) {
@@ -330,8 +381,7 @@ fun Application.module() {
         }
     }
 
-    // 9. Optional Demo Traffic Generator (Ensures Live Dashboard Data on Fresh Start)
-    val isDemoTrafficEnabled = System.getenv("DEMO_TRAFFIC")?.toBoolean() ?: true
+    // 9. Optional Demo Traffic Generator (OFF by default: DEMO_TRAFFIC=false)
     if (isDemoTrafficEnabled) {
         launch(Dispatchers.Default) {
             delay(2000L) // Initial warm up delay
@@ -362,24 +412,27 @@ fun Application.module() {
                     val decision = if (eval.allowed) "allowed" else if (eval.action == "BLOCK") "sliding_window" else "token_bucket"
 
                     val log = historyManager.recordRequest(
-                        clientId = ip,
+                        clientId = "demo:$ip",
                         method = "GET",
                         path = endpoint,
                         status = status,
                         latencyMs = latency,
-                        decision = decision
+                        decision = decision,
+                        source = "demo",
+                        clientIp = ip
                     )
 
                     webSocketManager.broadcast(
                         GatewayEvent(
                             type = if (eval.allowed) "request" else "blocked_request",
                             id = log.id,
-                            ip = ip,
+                            ip = log.clientId,
                             endpoint = endpoint,
                             method = "GET",
                             status = status,
                             latencyMs = latency,
                             decision = decision,
+                            source = "demo",
                             timestamp = start / 1000.0
                         )
                     )

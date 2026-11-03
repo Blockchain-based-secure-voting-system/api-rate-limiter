@@ -167,9 +167,12 @@ fun RateLimitScreen(
                                 )
                                 if (isAdmin) {
                                     Spacer(modifier = Modifier.height(14.dp))
-                                    GlassButton(
+                                    CardPillButton(
                                         text = "+ Create Rule",
-                                        accentColor = PolyPrimary,
+                                        icon = Icons.Default.Add,
+                                        containerColor = Nt14Ui.Accent,
+                                        contentColor = Color.White,
+                                        borderColor = null,
                                         onClick = { showAddDialog = true }
                                     )
                                 }

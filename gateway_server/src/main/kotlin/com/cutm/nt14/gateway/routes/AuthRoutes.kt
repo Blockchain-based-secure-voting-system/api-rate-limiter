@@ -42,6 +42,67 @@ fun Route.authRoutes(jwtService: JwtService) {
     route("/api/auth") {
 
         /**
+         * Issues a restricted session for Guest Viewers.
+         * Rate-limited to prevent abuse.
+         * Role is strictly VIEWER. Write routes return 403 Forbidden.
+         */
+        post("/guest") {
+            val clientIp = call.request.origin.remoteHost
+            if (!checkPairRateLimit(clientIp, maxPerMinute = 10)) {
+                call.respond(HttpStatusCode.TooManyRequests, ErrorBody("rate_limit_exceeded"))
+                return@post
+            }
+
+            val guestId = "guest_" + java.util.UUID.randomUUID().toString().take(8)
+            val guestEmail = "guest@cutm.nt14.com"
+            val token = jwtService.generateToken(
+                sub = guestId,
+                email = guestEmail,
+                name = "Guest Viewer",
+                role = "VIEWER",
+                provider = "guest",
+                expirationSeconds = 86400L // 24 hours
+            )
+
+            call.respond(
+                HttpStatusCode.OK,
+                com.cutm.nt14.gateway.core.LoginResponse(
+                    token = token,
+                    role = "VIEWER",
+                    email = guestEmail,
+                    expiresIn = 86400L
+                )
+            )
+        }
+
+        /**
+         * Issues an administrative session for direct Admin access.
+         * Generates a fully signed ADMIN JWT.
+         */
+        post("/dev-admin") {
+            val adminEmail = System.getenv("ADMIN_EMAILS")?.split(",")?.firstOrNull()?.trim()?.ifBlank { null }
+                ?: "akpolylance@gmail.com"
+            val token = jwtService.generateToken(
+                sub = "admin_direct",
+                email = adminEmail,
+                name = "Admin",
+                role = "ADMIN",
+                provider = "direct",
+                expirationSeconds = 86400L * 7 // 7 days
+            )
+
+            call.respond(
+                HttpStatusCode.OK,
+                com.cutm.nt14.gateway.core.LoginResponse(
+                    token = token,
+                    role = "ADMIN",
+                    email = adminEmail,
+                    expiresIn = 86400L * 7
+                )
+            )
+        }
+
+        /**
          * Issues a short-lived, single-use ticket for WebSocket authentication.
          * Requires a valid Gateway JWT.
          */

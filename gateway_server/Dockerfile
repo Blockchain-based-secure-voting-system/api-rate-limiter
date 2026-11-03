@@ -26,7 +26,7 @@ ENV ADMIN_EMAILS=akpolylance@gmail.com
 ENV TRUSTED_PROXIES=127.0.0.1,::1,localhost
 ENV GOOGLE_CLIENT_ID=""
 ENV POLYLANCE_BASE_URL=https://polylance-fv-1-45wy.onrender.com
-ENV DEMO_TRAFFIC=true
+ENV DEMO_TRAFFIC=false
 
 COPY --from=build /app/gateway_server/build/install/gateway_server ./
 

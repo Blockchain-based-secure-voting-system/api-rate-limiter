@@ -15,10 +15,9 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 private val logger = LoggerFactory.getLogger("DemoRoutes")
-private val upstream = PolyLanceUpstream()
 private val dynamicLocalEscrows = CopyOnWriteArrayList<PolyLanceEscrow>()
 
-fun Route.demoRoutes() {
+fun Route.demoRoutes(upstream: PolyLanceUpstream = PolyLanceUpstream()) {
     route("/api") {
         get("/users") {
             try {
@@ -53,6 +52,15 @@ fun Route.demoRoutes() {
 
         // Real-Time PolyLance Sovereign Protocol Endpoints
         route("/polylance") {
+            get("/health") {
+                val ok = upstream.keepAlive()
+                if (ok) {
+                    call.respond(HttpStatusCode.OK, ApiMessage("PolyLance upstream healthy (${upstream.baseUrl})"))
+                } else {
+                    call.respond(HttpStatusCode.BadGateway, ApiMessage("PolyLance upstream unreachable (${upstream.baseUrl})"))
+                }
+            }
+
             get("/escrows") {
                 try {
                     val liveEscrows = upstream.fetchEscrows()

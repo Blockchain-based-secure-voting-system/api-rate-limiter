@@ -50,14 +50,8 @@ class SplashViewModel @Inject constructor(
             if (email.isNullOrBlank()) {
                 _destination.value = SplashDestination.Login
             } else {
-                // User has an active Google/Guest session
-                if (biometricHelper.canAuthenticate()) {
-                    // Device supports fingerprint or PIN -> require Biometric Lock
-                    _destination.value = SplashDestination.BiometricLock
-                } else {
-                    // Device lacks biometric/PIN hardware -> skip gate and proceed to Dashboard
-                    _destination.value = SplashDestination.Dashboard
-                }
+                // Active session exists -> proceed straight to Dashboard
+                _destination.value = SplashDestination.Dashboard
             }
         }
     }

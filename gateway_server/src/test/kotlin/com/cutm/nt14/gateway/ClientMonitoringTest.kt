@@ -233,4 +233,42 @@ class ClientMonitoringTest {
         assertEquals(HttpStatusCode.OK, unbanResp.status)
         assertNull(rateLimiter.anomalyDetector.checkBan("198.51.100.77"))
     }
+
+    @Test
+    fun testGuestAuthIssuesRestrictedViewerSession() = testApplication {
+        val clientTracker = ClientTracker()
+        val rateLimiter = RateLimiter()
+        val wsManager = WebSocketManager()
+        val historyManager = TrafficHistoryManager()
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                authRoutes(jwtService)
+                ruleRoutes(rateLimiter, wsManager, historyManager, jwtService, System.currentTimeMillis(), clientTracker)
+            }
+        }
+
+        // 1. Request guest session
+        val guestResp = client.post("/api/auth/guest")
+        assertEquals(HttpStatusCode.OK, guestResp.status)
+        val loginResponse = Json.decodeFromString<com.cutm.nt14.gateway.core.LoginResponse>(guestResp.bodyAsText())
+        assertEquals("VIEWER", loginResponse.role)
+        assertEquals("guest@cutm.nt14.com", loginResponse.email)
+        assertTrue(loginResponse.token.isNotBlank())
+
+        // 2. Guest can read stats
+        val statsResp = client.get("/api/stats") {
+            header(HttpHeaders.Authorization, "Bearer ${loginResponse.token}")
+        }
+        assertEquals(HttpStatusCode.OK, statsResp.status)
+
+        // 3. Guest CANNOT write rules (403 Forbidden)
+        val writeResp = client.post("/api/rules") {
+            header(HttpHeaders.Authorization, "Bearer ${loginResponse.token}")
+            contentType(ContentType.Application.Json)
+            setBody(Json.encodeToString(RateLimitRule("/api/test", 100, 20)))
+        }
+        assertEquals(HttpStatusCode.Forbidden, writeResp.status)
+    }
 }

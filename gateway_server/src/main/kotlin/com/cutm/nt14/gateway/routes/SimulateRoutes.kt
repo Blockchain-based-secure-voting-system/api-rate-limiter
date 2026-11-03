@@ -77,7 +77,9 @@ fun Route.simulateRoutes(
                     path = endpoint,
                     status = status,
                     latencyMs = latency,
-                    decision = decision
+                    decision = decision,
+                    source = "demo",
+                    clientIp = ip
                 )
 
                 val eventType = when {
@@ -108,6 +110,7 @@ fun Route.simulateRoutes(
                         status = status,
                         latencyMs = latency,
                         decision = decision,
+                        source = "demo",
                         timestamp = start / 1000.0
                     )
                 )

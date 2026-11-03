@@ -1,121 +1,46 @@
-# NT14 Rate Limiter Gateway Backend (Kotlin / Ktor)
+# NT14 Rate Limiter Gateway Backend (Kotlin / Ktor + PostgreSQL)
 
-High-performance API rate limiter gateway and real-time telemetry service pairing with the **NT14 Android Optimizer Application**.
+High-performance API rate limiter gateway, durable PostgreSQL telemetry engine, and synthetic upstream monitor pairing with the **NT14 Android Optimizer Application**.
 
 ---
 
-## Architecture & Algorithm Semantics
+## 1. Durable Storage & Schema (`V1__init.sql`)
 
-The gateway implements a dual-layer rate-limiting strategy evaluated with strict **AND** semantics:
+When `DATABASE_URL` is configured (`postgres://...` or `jdbc:postgresql://...`), the gateway initializes a `HikariDataSource` pool and runs Flyway migrations from `src/main/resources/db/migration/V1__init.sql`:
 
-```mermaid
-flowchart TD
-    Client["HTTP Client / Android App"] -->|Request| MW["Rate Limiter Middleware"]
-    MW --> TB["Token Bucket\n(Governs Bursts)"]
-    MW --> SW["Sliding Window\n(Governs Rolling Rate)"]
-    TB -->|Pass| SW
-    SW -->|Pass| Endpoint["Protected API Route (/api/users, ...)"]
-    TB -->|Fail| Block["HTTP 429 Too Many Requests"]
-    SW -->|Fail| Refund["Refund Consumed Bucket Token"] --> Block
-    Block --> WS["WebSocket Event Broadcaster"]
-    Endpoint --> WS
-    WS -.->|Live Event Feed| AndroidClient["GatewayWebSocketClient (Android)"]
+```sql
+request_logs      (id BIGINT PK, ts TIMESTAMPTZ, client_id TEXT, client_ip_hash TEXT, method TEXT, path TEXT, status INT, latency_ms BIGINT, decision TEXT, source TEXT ['real'|'demo'], upstream TEXT)
+metrics_1m        (minute TIMESTAMPTZ, endpoint TEXT, source TEXT, requests BIGINT, allowed BIGINT, throttled BIGINT, errors BIGINT, p50 DOUBLE PRECISION, p95 DOUBLE PRECISION, latency_sum_ms BIGINT, PRIMARY KEY (minute, endpoint, source))
+clients           (id TEXT PK, label TEXT, source TEXT, first_seen TIMESTAMPTZ, last_seen TIMESTAMPTZ, total_requests BIGINT, throttled_count BIGINT)
+bans              (client_key TEXT PK, reason TEXT, created_at TIMESTAMPTZ, expires_at TIMESTAMPTZ, created_by TEXT)
+rules             (endpoint_id TEXT PK, limit_per_min INT, burst_limit INT, action TEXT, updated_at TIMESTAMPTZ)
+incidents         (id TEXT PK, ts TIMESTAMPTZ, type TEXT, severity TEXT, detail TEXT, target_id BIGINT, resolved_at TIMESTAMPTZ)
+monitored_targets (id BIGSERIAL PK, name TEXT UNIQUE, url TEXT, method TEXT, expected_status INT, interval_sec INT, timeout_ms INT, enabled BOOLEAN, created_at TIMESTAMPTZ)
+probe_results     (id BIGSERIAL PK, target_id BIGINT FK, ts TIMESTAMPTZ, up BOOLEAN, status_code INT, latency_ms BIGINT, error TEXT, transition TEXT)
 ```
 
-### Algorithm Combination Logic (Decision 4a: AND)
-- **Token Bucket**: Enforces burst tolerance up to bucket capacity and refills continuously at `limitPerMin / 60.0` tokens/second.
-- **Sliding Window Counter**: Records timestamps over a rolling 60-second window to prevent boundary-clustering attacks.
-- **Combination**: Every request must pass **both** algorithms. If the sliding window rejects, any token consumed from the bucket is refunded.
-- **Response Headers**:
-  - `X-RateLimit-Limit`: Maximum requests permitted per window.
-  - `X-RateLimit-Remaining`: Remaining allowance before throttling.
-  - `X-RateLimit-Reset`: Seconds until window resets.
-  - `Retry-After`: Required backoff seconds returned on `429 Too Many Requests`.
+### Hot-Path Batching & Retention
+- **Non-blocking Queue**: `RequestLogWriter` uses a bounded `ArrayBlockingQueue(10_000)` flushed every `1 s` in batches of `1,000` rows. Overflow is dropped and counted (`dropped` counter exposed in `/health`).
+- **Scheduled Retention**: `RetentionJob` runs hourly and purges `request_logs` older than **7 days**, `metrics_1m` older than **90 days**, `probe_results` older than **30 days**, and expired `bans`.
 
 ---
 
-## Authentication & Control-Plane Security (Decision 4b)
+## 2. REST & WebSocket API Reference
 
-All state-mutating endpoints and telemetry streams require unified authentication using API Key `dev-local-key`:
-- Supported via `X-API-Key` HTTP header or `?api_key=dev-local-key` query parameter.
-- Unauthenticated requests to control-plane routes immediately return `401 Unauthorized`.
-
-### API Routes Overview
-
-| Method | Endpoint | Auth Required | Description |
+| Method | Endpoint | Auth / Role | Description |
 |---|---|---|---|
-| `GET` | `/health` | No | Gateway health and active subscriber count |
-| `GET` | `/api/users` | No (Rate Limited) | Protected demo user directory |
-| `GET` | `/api/orders` | No (Rate Limited) | Protected demo order directory |
-| `GET` | `/api/products` | No (Rate Limited) | Protected demo product catalog |
-| `GET` | `/api/rules` | **Yes** (`dev-local-key`) | Retrieve all active rate limit rules |
-| `POST` | `/api/rules` | **Yes** (`dev-local-key`) | Create or update dynamic rate limit rule |
-| `DELETE` | `/api/rules/{endpoint}` | **Yes** (`dev-local-key`) | Delete or reset endpoint rule |
-| `POST` | `/api/simulate` | **Yes** (`dev-local-key`) | Inject simulated traffic burst |
-| `WS` | `/ws/events` | **Yes** (`dev-local-key`) | Real-time telemetry feed |
-
----
-
-## Quick Start & Running the Server
-
-### 1. Prerequisites
-- JDK 17 or higher (Gradle wrapper included).
-- Port `8000` available on localhost.
-
-### 2. Start the Gateway Server
-```powershell
-# From root repository directory:
-.\gradlew.bat :gateway_server:run
-```
-The server will start and bind to `http://0.0.0.0:8000`.
-
-### 3. Run Unit Tests
-```powershell
-.\gradlew.bat :gateway_server:test
-```
-
-### 4. Run CLI Traffic Simulator
-```powershell
-# Default test sequence (WebSocket listener + normal traffic + burst attack):
-.\gradlew.bat :gateway_server:runSimulate
-
-# Or pass specific modes:
-.\gradlew.bat :gateway_server:runSimulate --args="normal"
-.\gradlew.bat :gateway_server:runSimulate --args="burst"
-.\gradlew.bat :gateway_server:runSimulate --args="listen"
-```
-
----
-
-## Connecting from Android App (Emulator & Device)
-
-The Android application (`com.cutm.nt14`) contains a pre-configured WebSocket client (`GatewayWebSocketClient.kt`):
-
-```kotlin
-// Android Emulator -> Host Machine loopback bridge
-private val serverWsUrl = "ws://10.0.2.2:8000/ws/events?api_key=dev-local-key"
-```
-
-- **Android Emulator**: Uses `10.0.2.2:8000` automatically mapped to host `localhost:8000`.
-- **Physical Device**: Replace `10.0.2.2` with your machine's local LAN IP (e.g. `192.168.1.x:8000`).
-
-### Telemetry Event Schema
-Every request and security breach emits a byte-for-byte JSON payload:
-```json
-{
-  "type": "request" | "blocked_request" | "ip_blocked",
-  "ip": "192.168.1.50",
-  "endpoint": "/api/users",
-  "status": 200,
-  "latency_ms": 24,
-  "timestamp": 1727459100.123
-}
-```
-When `type` is `"ip_blocked"` or `"blocked_request"`, the Android application automatically inserts records into `AbuseEventDao` and triggers a high-priority heads-up security notification.
-
----
-
-## Known Limitations
-
-- **In-Memory State**: Rate limits, token buckets, and request sliding windows are stored in memory (`ConcurrentHashMap`). State resets upon gateway restart and is not shared across distributed server instances. (Production deployments would back this with a Redis cluster).
-- **Plain HTTP / WS (No TLS)**: The service operates over cleartext HTTP and WS. It is designed for local development and Android emulator loopback bridge (`10.0.2.2`), not direct internet exposure without a reverse proxy terminating TLS (such as Nginx, Cloudflare, or Envoy).
+| `GET` | `/health` | Public | Health, uptime, live metrics, `persistence` queue/batch status, `demoTraffic` flag |
+| `GET` | `/api/polylance/escrows` | Public (Rate-Limited) | Proxies live PolyLance escrows (`/api/jobs`), logged with `source=real` |
+| `GET` | `/api/polylance/talents` | Public (Rate-Limited) | Proxies live PolyLance talents (`/api/sync`), logged with `source=real` |
+| `GET` | `/api/polylance/attestations` | Public (Rate-Limited) | Proxies live PolyLance attestations (`/api/sync`), logged with `source=real` |
+| `GET` | `/api/logs` | `VIEWER` or `ADMIN` | Keyset-paginated logs (`?cursor&limit&status&client&from&to&source=real\|demo`) |
+| `GET` | `/api/metrics` | `VIEWER` or `ADMIN` | Time-series rollups from `metrics_1m` (`?range=1h\|24h\|7d&source=real\|demo`) |
+| `GET` | `/api/reports` | `VIEWER` or `ADMIN` | Aggregated traffic report from PostgreSQL (`?range=1h\|24h\|7d&source=real\|demo`) |
+| `GET` | `/api/targets/status` | `VIEWER` or `ADMIN` | Monitored targets with up/down status, 24h uptime %, and latency sparklines |
+| `GET/POST/PUT/DELETE` | `/api/targets` | `ADMIN` only | Full CRUD for `monitored_targets` + `POST /api/targets/{id}/probe` |
+| `GET` | `/api/export` | `ADMIN` only | Streams CSV export (`?from&to&format=csv&source&status&client`) |
+| `GET` | `/api/rules` | `VIEWER` or `ADMIN` | List rate limit rules (persisted in `rules`) |
+| `POST/PUT/DELETE` | `/api/rules` | `ADMIN` only | Create, update, or remove rate limit rules |
+| `GET` | `/api/bans` | `VIEWER` or `ADMIN` | List active bans (persisted in `bans`) |
+| `POST/DELETE` | `/api/bans` | `ADMIN` only | Ban or unban a client |
+| `WS` | `/ws/events` | `VIEWER` or `ADMIN` | Real-time stream; initial `snapshot` is loaded from PostgreSQL (`snapshotFrom="db"`) |

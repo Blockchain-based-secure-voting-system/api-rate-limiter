@@ -32,9 +32,17 @@ class PolyLanceUpstreamException(message: String) : Exception(message)
  * Upstream base URL can be overridden with the POLYLANCE_API_BASE environment variable.
  */
 class PolyLanceUpstream(
-    private val baseUrl: String = System.getenv("POLYLANCE_API_BASE")
+    val baseUrl: String = System.getenv("POLYLANCE_API_BASE")
+        ?: System.getenv("POLYLANCE_BASE_URL")
         ?: "https://polylance-fv-1-45wy.onrender.com"
 ) {
+    fun upstreamUrlFor(gatewayPath: String): String? = when (gatewayPath) {
+        "/api/polylance/escrows", "/api/orders" -> "$baseUrl/api/jobs"
+        "/api/polylance/talents", "/api/users" -> "$baseUrl/api/sync"
+        "/api/polylance/attestations", "/api/products" -> "$baseUrl/api/sync"
+        "/api/polylance/health" -> "$baseUrl/health"
+        else -> null
+    }
     private val logger = LoggerFactory.getLogger(PolyLanceUpstream::class.java)
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -151,10 +153,12 @@ fun BiometricLockScreen(
                             fontSize = 13.sp
                         )
                     } else {
-                        GlassButton(
+                        CardPillButton(
                             text = "Unlock with Fingerprint",
-                            accentColor = PolyPrimary,
-                            isFilled = true,
+                            icon = Icons.Default.Fingerprint,
+                            containerColor = Nt14Ui.Accent,
+                            contentColor = Color.White,
+                            borderColor = null,
                             onClick = {
                                 if (activity != null) {
                                     viewModel.authenticate(activity)
@@ -165,10 +169,12 @@ fun BiometricLockScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        GlassButton(
+                        CardPillButton(
                             text = "Unlock with Device PIN / Pattern",
-                            accentColor = PolyCyan,
-                            isFilled = false,
+                            icon = Icons.Default.Lock,
+                            containerColor = Nt14Ui.TileFill,
+                            contentColor = Nt14Ui.TextPrimary,
+                            borderColor = Nt14Ui.Outline,
                             onClick = {
                                 val pinIntent = viewModel.getDeviceCredentialIntent()
                                 if (pinIntent != null) {
@@ -182,10 +188,12 @@ fun BiometricLockScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        GlassButton(
+                        CardPillButton(
                             text = "Sign out instead",
-                            accentColor = PolyTextSecondary,
-                            isFilled = false,
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
+                            containerColor = Color.Transparent,
+                            contentColor = Nt14Ui.TextMuted,
+                            borderColor = Nt14Ui.Outline,
                             onClick = {
                                 viewModel.signOut(activity, onSignOut)
                             },

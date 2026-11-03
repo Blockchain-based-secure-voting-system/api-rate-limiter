@@ -38,7 +38,13 @@ data class GatewayEvent(
     val rule: RateLimitRule? = null,
     val incident: IncidentDto? = null,
     val clients: List<ClientInfo>? = null,
-    val client: ClientInfo? = null
+    val client: ClientInfo? = null,
+    val source: String? = null,            // "real" | "demo" on request events
+    val upstream: String? = null,
+    val target: TargetStatusDto? = null,   // target_status event
+    val targets: List<TargetStatusDto>? = null,
+    val persistence: String? = null,       // "postgres" | "memory" on snapshot
+    val snapshotFrom: String? = null       // "db" when the snapshot was read from PostgreSQL
 )
 
 @Serializable
@@ -100,7 +106,10 @@ data class RequestLogDto(
     val path: String,
     val status: Int,
     val latencyMs: Long,
-    val decision: String
+    val decision: String,
+    val source: String = "real",
+    val upstream: String? = null,
+    val clientIpHash: String? = null
 )
 
 @Serializable
@@ -109,7 +118,9 @@ data class IncidentDto(
     val type: String,
     val severity: String = "HIGH", // "CRITICAL", "HIGH", "MEDIUM"
     val detail: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val targetId: Long? = null,
+    val resolvedAt: Long? = null
 )
 
 @Serializable
@@ -124,7 +135,13 @@ data class TrafficReportDto(
     val peakRps: Double,
     val topEndpoints: Map<String, Long>,
     val topClients: Map<String, Long>,
-    val generatedAt: Long = System.currentTimeMillis()
+    val generatedAt: Long = System.currentTimeMillis(),
+    val serverErrors: Long = 0,
+    val source: String = "all",
+    val persistence: String = "memory",
+    val dataFrom: Long = 0,
+    val dataTo: Long = 0,
+    val lastRollupAt: Long = 0
 )
 
 /**
@@ -185,7 +202,9 @@ data class HealthResponse(
     val status: String,
     val subscribers: Int,
     val uptimeMs: Long = 0L,
-    val metrics: GatewayMetrics? = null
+    val metrics: GatewayMetrics? = null,
+    val persistence: PersistenceStatus? = null,
+    val demoTraffic: Boolean = false
 )
 
 // PolyLance Web3 Protocol Models
@@ -279,4 +298,95 @@ data class StatsResponse(
     val rulesCount: Int,
     val metrics: GatewayMetrics,
     val demoMode: Boolean = false
+)
+
+
+// ---- Persistence / monitoring DTOs -------------------------------------------------------------
+
+@Serializable
+data class LogsPage(
+    val items: List<RequestLogDto>,
+    val nextCursor: String? = null,
+    val limit: Int,
+    val source: String = "all",
+    val persistence: String = "postgres",
+    val generatedAt: Long = System.currentTimeMillis()
+)
+
+@Serializable
+data class MetricsPointDto(
+    val ts: Long,
+    val requests: Long,
+    val allowed: Long,
+    val throttled: Long,
+    val errors: Long,
+    val p50: Double,   // request-weighted mean of per-minute p50
+    val p95: Double    // max of per-minute p95 within the bucket (upper bound)
+)
+
+@Serializable
+data class MetricsSeriesDto(
+    val range: String,
+    val bucketSeconds: Int,
+    val source: String,
+    val points: List<MetricsPointDto>,
+    val lastRollupAt: Long,
+    val generatedAt: Long
+)
+
+@Serializable
+data class MonitoredTarget(
+    val id: Long,
+    val name: String,
+    val url: String,
+    val method: String = "GET",
+    val expectedStatus: Int = 200,
+    val intervalSec: Int = 30,
+    val timeoutMs: Int = 10_000,
+    val enabled: Boolean = true
+)
+
+@Serializable
+data class TargetRequest(
+    val name: String,
+    val url: String,
+    val method: String = "GET",
+    val expectedStatus: Int = 200,
+    val intervalSec: Int = 30,
+    val timeoutMs: Int = 10_000,
+    val enabled: Boolean = true
+)
+
+@Serializable
+data class TargetStatusDto(
+    val id: Long,
+    val name: String,
+    val url: String,
+    val method: String,
+    val expectedStatus: Int,
+    val intervalSec: Int,
+    val enabled: Boolean,
+    val up: Boolean? = null,               // null = not probed yet
+    val lastStatusCode: Int? = null,
+    val lastLatencyMs: Long? = null,
+    val lastError: String? = null,
+    val lastCheckedAt: Long? = null,
+    val consecutiveFailures: Int = 0,
+    val uptimePct24h: Double? = null,
+    val recentLatencies: List<Long> = emptyList(),  // oldest -> newest, for sparklines
+    val recentUp: List<Boolean> = emptyList(),
+    val openIncidentId: String? = null,
+    val transition: String? = null
+)
+
+@Serializable
+data class PersistenceStatus(
+    val mode: String,                // "postgres" | "memory"
+    val queued: Int = 0,
+    val written: Long = 0,
+    val dropped: Long = 0,
+    val batches: Long = 0,
+    val failures: Long = 0,
+    val lastFlushAt: Long = 0,
+    val lastRollupAt: Long = 0
 )

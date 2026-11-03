@@ -14,26 +14,50 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
     private val totalAllowed = AtomicLong(0)
     private val totalThrottled = AtomicLong(0)
 
+    /** Durable sinks, set when PostgreSQL persistence is enabled. Must be non-blocking. */
+    @Volatile var logSink: ((com.cutm.nt14.gateway.db.LogEntry) -> Unit)? = null
+    @Volatile var incidentSink: ((IncidentDto) -> Unit)? = null
+
+    /**
+     * Records one gateway decision. `clientId` is the raw limiter key (IP or "user:<email>");
+     * only a masked form is kept in memory/WS and only masked + HMAC-hashed forms reach the database.
+     */
     fun recordRequest(
-        id: String = "req_" + UUID.randomUUID().toString().take(8),
+        id: String = com.cutm.nt14.gateway.db.LogIdGenerator.next().toString(),
         timestamp: Long = System.currentTimeMillis(),
         clientId: String,
         method: String,
         path: String,
         status: Int,
         latencyMs: Long,
-        decision: String
+        decision: String,
+        source: String = "real",
+        upstream: String? = null,
+        clientIp: String? = null
     ): RequestLogDto {
+        val privacy = com.cutm.nt14.gateway.db.IpPrivacy
+        val ipForHash = clientIp ?: clientId.takeIf { privacy.looksLikeIp(it) }
+        val ipHash = ipForHash?.let { privacy.hash(it) }
+        val storedClient = privacy.storedClientId(clientId)
         val log = RequestLogDto(
             id = id,
             timestamp = timestamp,
-            clientId = clientId,
+            clientId = storedClient,
             method = method,
             path = path,
             status = status,
             latencyMs = latencyMs,
-            decision = decision
+            decision = decision,
+            source = source,
+            upstream = upstream,
+            clientIpHash = ipHash
         )
+
+        logSink?.let { sink ->
+            id.toLongOrNull()?.let { numericId ->
+                sink(com.cutm.nt14.gateway.db.LogEntry(numericId, timestamp, storedClient, ipHash, method, path, status, latencyMs, decision, source, upstream))
+            }
+        }
 
         logsRingBuffer.addLast(log)
         while (logsRingBuffer.size > maxLogs) {
@@ -61,11 +85,17 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
             detail = detail,
             timestamp = System.currentTimeMillis()
         )
+        pushIncident(incident)
+        runCatching { incidentSink?.invoke(incident) }
+        return incident
+    }
+
+    /** Adds an incident to the in-memory list only (used when it was already persisted elsewhere). */
+    fun pushIncident(incident: IncidentDto) {
         incidentsList.addLast(incident)
         while (incidentsList.size > 50) {
             incidentsList.pollFirst()
         }
-        return incident
     }
 
     @Volatile private var baselineRps: Double = 5.0
@@ -93,14 +123,55 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
         return null
     }
 
-    fun getRecentLogs(limit: Int = 200, cursor: String? = null): List<RequestLogDto> {
-        val all = logsRingBuffer.toList().reversed()
+    fun getRecentLogs(limit: Int = 200, cursor: String? = null, source: String? = null): List<RequestLogDto> {
+        val src = com.cutm.nt14.gateway.db.normalizeSource(source)
+        val all = logsRingBuffer.toList().reversed().filter { src == null || it.source == src }
         if (cursor.isNullOrBlank()) {
             return all.take(limit)
         }
-        val index = all.indexOfFirst { it.id == cursor }
-        if (index < 0) return all.take(limit)
-        return all.drop(index + 1).take(limit)
+        val cursorLong = cursor.toLongOrNull()
+        val after = if (cursorLong != null) {
+            all.filter { (it.id.toLongOrNull() ?: Long.MAX_VALUE) < cursorLong }
+        } else {
+            val index = all.indexOfFirst { it.id == cursor }
+            if (index < 0) all else all.drop(index + 1)
+        }
+        return after.take(limit)
+    }
+
+    fun queryLogs(q: com.cutm.nt14.gateway.db.LogQuery): LogsPage {
+        val limit = q.limit.coerceIn(1, 500)
+        val src = com.cutm.nt14.gateway.db.normalizeSource(q.source)
+        val statusClass = q.status?.trim()?.lowercase()?.let { Regex("^([1-5])xx$").find(it)?.groupValues?.get(1)?.toInt() }
+        val statusExact = q.status?.trim()?.toIntOrNull()
+        val clientFilter = q.client?.trim()?.takeIf { it.isNotEmpty() }
+        val clientIpHash = clientFilter?.let {
+            when {
+                it.startsWith("iphash:") -> it.removePrefix("iphash:")
+                com.cutm.nt14.gateway.db.IpPrivacy.looksLikeIp(it) -> com.cutm.nt14.gateway.db.IpPrivacy.hash(it)
+                else -> null
+            }
+        }
+        val filtered = logsRingBuffer.toList().reversed().filter { log ->
+            val idLong = log.id.toLongOrNull() ?: Long.MAX_VALUE
+            (q.cursor == null || idLong < q.cursor) &&
+                (q.fromMs == null || log.timestamp >= q.fromMs) &&
+                (q.toMs == null || log.timestamp < q.toMs) &&
+                (src == null || log.source == src) &&
+                (statusClass == null || (log.status in (statusClass * 100)..<(statusClass * 100 + 100))) &&
+                (statusExact == null || log.status == statusExact) &&
+                (clientFilter == null || (if (clientIpHash != null) log.clientIpHash == clientIpHash else log.clientId == clientFilter))
+        }
+        val hasMore = filtered.size > limit
+        val items = filtered.take(limit)
+        return LogsPage(
+            items = items,
+            nextCursor = if (hasMore) items.last().id else null,
+            limit = limit,
+            source = src ?: "all",
+            persistence = "memory",
+            generatedAt = System.currentTimeMillis()
+        )
     }
 
     fun getLogsSince(lastEventId: String): List<RequestLogDto>? {
@@ -140,7 +211,7 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
             endpointCounts[log.path] = (endpointCounts[log.path] ?: 0L) + 1L
         }
 
-        val isDemo = System.getenv("DEMO_TRAFFIC")?.toBooleanStrictOrNull() ?: true
+        val isDemo = System.getenv("DEMO_TRAFFIC")?.toBooleanStrictOrNull() ?: false
 
         return GatewayMetrics(
             rps = (rps * 10).roundToInt() / 10.0,
@@ -155,7 +226,7 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
         )
     }
 
-    fun generateReport(range: String = "1h"): TrafficReportDto {
+    fun generateReport(range: String = "1h", source: String? = null): TrafficReportDto {
         val now = System.currentTimeMillis()
         val durationMs = when (range.lowercase()) {
             "24h" -> 86_400_000L
@@ -163,10 +234,12 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
             else -> 3_600_000L // 1h default
         }
         val cutoff = now - durationMs
-        val filtered = logsRingBuffer.filter { it.timestamp >= cutoff }
+        val src = com.cutm.nt14.gateway.db.normalizeSource(source)
+        val filtered = logsRingBuffer.filter { it.timestamp >= cutoff && (src == null || it.source == src) }
 
         val total = filtered.size.toLong()
         val blocked = filtered.count { it.status == 429 || it.decision != "allowed" }.toLong()
+        val serverErrors = filtered.count { it.status >= 500 }.toLong()
         val allowed = total - blocked
         val errorRate = if (total > 0) blocked.toDouble() / total.toDouble() else 0.0
 
@@ -192,7 +265,10 @@ class TrafficHistoryManager(private val maxLogs: Int = 1000) {
             peakRps = peakRps,
             topEndpoints = topEndpoints,
             topClients = topClients,
-            generatedAt = now
+            generatedAt = now,
+            serverErrors = serverErrors,
+            source = src ?: "all",
+            persistence = "memory"
         )
     }
 

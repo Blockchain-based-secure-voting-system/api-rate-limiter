@@ -11,9 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import com.cutm.nt14.domain.model.UserRole
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +38,7 @@ import com.cutm.nt14.ui.login.LoginViewModel
 import com.cutm.nt14.ui.login.SplashScreen
 import com.cutm.nt14.ui.login.SplashViewModel
 import com.cutm.nt14.ui.logs.LogScreen
+import com.cutm.nt14.ui.monitoring.MonitoringScreen
 import com.cutm.nt14.ui.ratelimits.RateLimitScreen
 import com.cutm.nt14.ui.reports.ReportScreen
 
@@ -47,6 +47,7 @@ sealed class Screen(val route: String, val title: String = "", val icon: android
     object Login : Screen("login")
     object BiometricLock : Screen("biometric_lock")
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Home)
+    object Monitoring : Screen("monitoring", "Monitor", Icons.Default.CheckCircle)
     object Endpoints : Screen("endpoints", "Endpoints", Icons.AutoMirrored.Filled.List)
     object Logs : Screen("logs", "Logs", Icons.Default.Info)
     object RateLimits : Screen("ratelimits", "Limits", Icons.Default.Settings)
@@ -64,7 +65,7 @@ fun NT14NavHost(repository: GatewayRepository) {
     val incidents by repository.incidents.collectAsState()
     val securityBadgeCount = bans.size + incidents.size
 
-    val bottomNavScreens = listOf(Screen.Dashboard, Screen.Endpoints, Screen.Logs, Screen.RateLimits, Screen.Incidents, Screen.Reports)
+    val bottomNavScreens = listOf(Screen.Dashboard, Screen.Monitoring, Screen.Logs, Screen.RateLimits, Screen.Incidents, Screen.Reports)
 
     Scaffold(
         containerColor = GlassBackgroundDark,
@@ -152,6 +153,8 @@ fun NT14NavHost(repository: GatewayRepository) {
             }
         }
     ) { innerPadding ->
+        var showHostDialog by remember { mutableStateOf(false) }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -160,7 +163,24 @@ fun NT14NavHost(repository: GatewayRepository) {
             if (currentRoute != Screen.Splash.route && 
                 currentRoute != Screen.Login.route && 
                 currentRoute != Screen.BiometricLock.route) {
-                GlobalConnectionBanner(repository)
+                com.cutm.nt14.ui.components.ConnectionStatusCard(
+                    repository = repository,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    onOpenHost = { showHostDialog = true }
+                )
+            }
+
+            if (showHostDialog) {
+                com.cutm.nt14.ui.components.GatewayHostConfigDialog(
+                    currentHost = repository.connectedHost.collectAsState().value,
+                    onDismiss = { showHostDialog = false },
+                    onSave = { newHost ->
+                        repository.updateHost(newHost)
+                        showHostDialog = false
+                    },
+                    isAdmin = repository.userRole.collectAsState().value == UserRole.ADMIN,
+                    repository = repository
+                )
             }
 
             Box(modifier = Modifier.weight(1f)) {
@@ -227,6 +247,7 @@ fun NT14NavHost(repository: GatewayRepository) {
                             }
                         )
                     }
+                    composable(Screen.Monitoring.route) { MonitoringScreen() }
                     composable(Screen.Endpoints.route) { EndpointScreen() }
                     composable(Screen.Logs.route) { LogScreen() }
                     composable(Screen.RateLimits.route) { RateLimitScreen() }

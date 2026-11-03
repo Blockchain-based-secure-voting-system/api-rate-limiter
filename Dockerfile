@@ -22,11 +22,11 @@ WORKDIR /app
 # Default environment configuration
 ENV PORT=8000
 ENV JWT_SECRET=nt14-gateway-secure-production-jwt-secret-key-2026
-ENV ADMIN_EMAILS=akpolylance@gmail.com,sunny.pasumarthi2005@gmail.com
+ENV ADMIN_EMAILS=akpolylance@gmail.com
 ENV TRUSTED_PROXIES=127.0.0.1,::1,localhost
 ENV GOOGLE_CLIENT_ID=""
 ENV POLYLANCE_BASE_URL=https://polylance-fv-1-45wy.onrender.com
-ENV DEMO_TRAFFIC=true
+ENV DEMO_TRAFFIC=false
 
 COPY --from=build /app/gateway_server/build/install/gateway_server ./
 

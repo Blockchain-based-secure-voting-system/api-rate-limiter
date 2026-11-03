@@ -63,6 +63,50 @@ fun PillActionButton(text: String, icon: ImageVector, onClick: () -> Unit, modif
     }
 }
 
+/** 1b. CardPillButton: Solid container color, 48dp minimum touch target, zero text background */
+@Composable
+fun CardPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    trailingIcon: ImageVector? = null,
+    containerColor: Color = Nt14Ui.TileFill,
+    contentColor: Color = Nt14Ui.TextPrimary,
+    borderColor: Color? = Nt14Ui.Outline,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        border = borderColor?.let { BorderStroke(1.dp, it) }
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor
+            )
+            if (trailingIcon != null) {
+                Spacer(Modifier.width(8.dp))
+                Icon(trailingIcon, contentDescription = null, tint = contentColor, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
 /**
  * 2. Round service button (like "Recharge", "Pay Bills"): white circle, soft glow, outline icon,
  * label underneath. Optional status ring: progress arc (e.g. bans / threshold) or a gradient ring (featured/new).

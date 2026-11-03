@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cutm.nt14.data.remote.model.RequestLogDto
 import com.cutm.nt14.ui.components.*
+import com.cutm.nt14.ui.monitoring.DataFreshnessBanner
+import com.cutm.nt14.ui.monitoring.SourceTagBadge
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -35,7 +37,11 @@ fun LogScreen(
     val logs by viewModel.logs.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val statusFilter by viewModel.statusFilter.collectAsState()
+    val sourceFilter by viewModel.sourceFilter.collectAsState()
     val isPaused by viewModel.isStreamingPaused.collectAsState()
+    val lastSyncMs by viewModel.lastDataSyncMs.collectAsState()
+    val persistenceMode by viewModel.persistenceMode.collectAsState()
+    val nextCursor by viewModel.nextCursor.collectAsState()
 
     var selectedLog by remember { mutableStateOf<RequestLogDto?>(null) }
 
@@ -77,7 +83,7 @@ fun LogScreen(
                             // Pause/Resume Stream Button
                             PillActionButton(
                                 text = if (isPaused) "Resume" else "Pause",
-                                icon = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Close,
+                                icon = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                 onClick = { viewModel.toggleStreamingPause() }
                             )
 
@@ -158,6 +164,27 @@ fun LogScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Source Filter + Data Freshness Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("all" to "All Sources", "real" to "Real Only", "demo" to "Demo Only").forEach { (src, lbl) ->
+                                FilterChip(
+                                    selected = sourceFilter == src,
+                                    onClick = { viewModel.setSourceFilter(src) },
+                                    label = { Text(lbl, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                )
+                            }
+                        }
+                    }
+
+                    DataFreshnessBanner(lastSyncMs = lastSyncMs, persistenceMode = persistenceMode)
                 }
             }
         ) { padding ->
@@ -201,9 +228,9 @@ fun LogScreen(
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(14.dp))
-                            GlassButton(
+                            CardPillButton(
                                 text = "Refresh Telemetry",
-                                accentColor = PolyPrimary,
+                                icon = Icons.Default.Refresh,
                                 onClick = { viewModel.refresh() }
                             )
                         }
@@ -270,6 +297,7 @@ fun LogScreen(
                                             color = PolyTextPrimary,
                                             fontFamily = FontFamily.Monospace
                                         )
+                                        SourceTagBadge(source = log.source)
                                     }
 
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -319,6 +347,23 @@ fun LogScreen(
                             }
                         }
                     }
+
+                    if (!nextCursor.isNullOrBlank()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CardPillButton(
+                                    text = "Load Older Logs (Cursor)",
+                                    icon = Icons.Default.Refresh,
+                                    onClick = { viewModel.loadMore() }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -338,9 +383,11 @@ fun LogScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DetailItem("Request ID", log.id)
+                        DetailItem("Traffic Source", log.source.uppercase())
                         DetailItem("Endpoint", log.path)
+                        log.upstream?.let { DetailItem("Upstream", it) }
                         DetailItem("Method", log.method)
-                        DetailItem("Client IP", log.clientId)
+                        DetailItem("Client ID", log.clientId)
                         DetailItem("HTTP Status", log.status.toString())
                         DetailItem("Latency", "${log.latencyMs} ms")
                         DetailItem("Policy Decision", log.decision)

@@ -16,8 +16,14 @@ import com.cutm.nt14.gateway.core.requireAdmin
 import com.cutm.nt14.gateway.core.requireAuth
 import com.cutm.nt14.gateway.core.ClientTracker
 import com.cutm.nt14.gateway.core.TrustedProxyResolver
+import com.cutm.nt14.gateway.db.LogQuery
+import com.cutm.nt14.gateway.db.Persistence
+import com.cutm.nt14.gateway.db.TimeParam
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.server.plugins.origin
+import io.ktor.server.response.header
+import io.ktor.server.response.respondTextWriter
 
 fun Route.ruleRoutes(
     rateLimiter: RateLimiter,
@@ -25,7 +31,8 @@ fun Route.ruleRoutes(
     historyManager: TrafficHistoryManager,
     jwtService: JwtService,
     startTimeMs: Long = System.currentTimeMillis(),
-    clientTracker: ClientTracker = ClientTracker()
+    clientTracker: ClientTracker = ClientTracker(),
+    persistence: Persistence? = null
 ) {
     // GET /api/whoami -> returns resolved IP & raw forwarding headers (ADMIN only)
     get("/api/whoami") {
@@ -77,21 +84,190 @@ fun Route.ruleRoutes(
         )
     }
 
-    // GET /api/logs -> recent logs with limit and cursor (requires valid JWT)
+    // GET /api/logs?cursor&limit&status&client&from&to&source -> keyset pagination (requires valid JWT)
     get("/api/logs") {
         if (call.requireAuth(jwtService) == null) return@get
-        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-        val cursor = call.request.queryParameters["cursor"]
-        val logs = historyManager.getRecentLogs(limit.coerceIn(1, 200), cursor)
-        call.respond(logs)
+        val qp = call.request.queryParameters
+        val limit = (qp["limit"]?.toIntOrNull() ?: 50).coerceIn(1, 500)
+        val cursorRaw = qp["cursor"]?.trim()?.takeIf { it.isNotEmpty() }
+        val q = LogQuery(
+            cursor = cursorRaw?.toLongOrNull(),
+            limit = limit,
+            status = qp["status"],
+            client = qp["client"],
+            fromMs = TimeParam.parse(qp["from"]),
+            toMs = TimeParam.parse(qp["to"]),
+            source = qp["source"]
+        )
+        val page = if (persistence != null) {
+            if (persistence.writer.pending() > 0) runCatching { persistence.writer.flushNow() }
+            persistence.logs.page(q)
+        } else {
+            historyManager.queryLogs(q)
+        }
+        page.nextCursor?.let { call.response.header("X-Next-Cursor", it) }
+        call.respond(page)
     }
 
-    // GET /api/reports?range=1h|24h|7d -> aggregated history (requires valid JWT)
+    // GET /api/metrics?range=1h|24h|7d&source=real|demo&endpoint=... -> time series from metrics_1m (requires valid JWT)
+    get("/api/metrics") {
+        if (call.requireAuth(jwtService) == null) return@get
+        val qp = call.request.queryParameters
+        val range = qp["range"] ?: "1h"
+        val source = qp["source"]
+        val endpoint = qp["endpoint"]
+        if (persistence != null) {
+            if (persistence.writer.pending() > 0) runCatching { persistence.writer.flushNow() }
+            val now = System.currentTimeMillis()
+            runCatching { persistence.metrics.rollup(now - 5 * 60_000L, now + 60_000L) }
+            call.respond(persistence.metrics.series(range, source, endpoint, now))
+        } else {
+            call.respond(
+                MetricsSeriesDto(
+                    range = range,
+                    bucketSeconds = 60,
+                    source = source ?: "all",
+                    points = emptyList(),
+                    lastRollupAt = 0L,
+                    generatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    // GET /api/reports?range=1h|24h|7d&source=real|demo -> aggregated from DB (requires valid JWT)
     get("/api/reports") {
         if (call.requireAuth(jwtService) == null) return@get
         val range = call.request.queryParameters["range"] ?: "1h"
-        val report = historyManager.generateReport(range)
+        val source = call.request.queryParameters["source"]
+        val report = if (persistence != null) {
+            if (persistence.writer.pending() > 0) runCatching { persistence.writer.flushNow() }
+            val now = System.currentTimeMillis()
+            runCatching { persistence.metrics.rollup(now - 5 * 60_000L, now + 60_000L) }
+            persistence.metrics.report(range, source, now)
+        } else {
+            historyManager.generateReport(range, source)
+        }
         call.respond(report)
+    }
+
+    // GET /api/incidents -> recent security & target-down incidents (requires valid JWT)
+    get("/api/incidents") {
+        if (call.requireAuth(jwtService) == null) return@get
+        val incidents = if (persistence != null) {
+            persistence.incidents.recent(50)
+        } else {
+            historyManager.getIncidents()
+        }
+        call.respond(incidents)
+    }
+
+    // GET /api/export?from&to&format=csv&source&status&client -> CSV export (ADMIN only)
+    get("/api/export") {
+        if (!call.requireAdmin(jwtService)) return@get
+        val qp = call.request.queryParameters
+        val format = (qp["format"] ?: "csv").lowercase()
+        if (format != "csv") {
+            call.respond(HttpStatusCode.BadRequest, ApiMessage("Unsupported export format '$format'. Use format=csv."))
+            return@get
+        }
+        val q = LogQuery(
+            status = qp["status"],
+            client = qp["client"],
+            fromMs = TimeParam.parse(qp["from"]),
+            toMs = TimeParam.parse(qp["to"]),
+            source = qp["source"]
+        )
+        call.response.header(HttpHeaders.ContentDisposition, "attachment; filename=\"gateway-logs.csv\"")
+        call.respondTextWriter(contentType = ContentType.Text.CSV) {
+            if (persistence != null) {
+                if (persistence.writer.pending() > 0) runCatching { persistence.writer.flushNow() }
+                persistence.logs.exportCsv(q, this)
+            } else {
+                write("id,ts,client_id,client_ip_hash,method,path,status,latency_ms,decision,source,upstream\n")
+                for (row in historyManager.queryLogs(q.copy(limit = 500)).items.reversed()) {
+                    write("${row.id},${java.time.Instant.ofEpochMilli(row.timestamp)},${row.clientId},${row.clientIpHash ?: ""},${row.method},${row.path},${row.status},${row.latencyMs},${row.decision},${row.source},${row.upstream ?: ""}\n")
+                }
+            }
+        }
+    }
+
+    // GET /api/targets/status -> live status, latency sparklines & 24h uptime for all targets (requires valid JWT)
+    get("/api/targets/status") {
+        if (call.requireAuth(jwtService) == null) return@get
+        val statuses = persistence?.monitor?.statusAll() ?: emptyList()
+        call.respond(statuses)
+    }
+
+    // /api/targets CRUD -> ADMIN only
+    route("/api/targets") {
+        get {
+            if (!call.requireAdmin(jwtService)) return@get
+            val list = persistence?.targets?.all() ?: emptyList()
+            call.respond(list)
+        }
+
+        post {
+            if (!call.requireAdmin(jwtService)) return@post
+            val db = persistence ?: return@post call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage("Database persistence not configured"))
+            val req = runCatching { call.receive<TargetRequest>() }.getOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ApiMessage("Invalid target payload"))
+            if (req.name.isBlank() || !(req.url.startsWith("http://") || req.url.startsWith("https://"))) {
+                return@post call.respond(HttpStatusCode.BadRequest, ApiMessage("Target requires a non-blank name and http(s):// url"))
+            }
+            val normalized = req.copy(
+                intervalSec = req.intervalSec.coerceIn(5, 3600),
+                timeoutMs = req.timeoutMs.coerceIn(500, 60_000),
+                method = req.method.uppercase()
+            )
+            val created = try {
+                db.targets.create(normalized)
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.Conflict, ApiMessage("Failed to create target: ${e.message}"))
+            }
+            db.monitor.invalidate(created.id)
+            call.respond(HttpStatusCode.Created, created)
+        }
+
+        put("{id}") {
+            if (!call.requireAdmin(jwtService)) return@put
+            val db = persistence ?: return@put call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage("Database persistence not configured"))
+            val id = call.parameters["id"]?.toLongOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest, ApiMessage("Invalid target id"))
+            val req = runCatching { call.receive<TargetRequest>() }.getOrNull()
+                ?: return@put call.respond(HttpStatusCode.BadRequest, ApiMessage("Invalid target payload"))
+            val normalized = req.copy(
+                intervalSec = req.intervalSec.coerceIn(5, 3600),
+                timeoutMs = req.timeoutMs.coerceIn(500, 60_000),
+                method = req.method.uppercase()
+            )
+            val updated = db.targets.update(id, normalized)
+                ?: return@put call.respond(HttpStatusCode.NotFound, ApiMessage("Target $id not found"))
+            db.monitor.invalidate(id)
+            call.respond(HttpStatusCode.OK, updated)
+        }
+
+        delete("{id}") {
+            if (!call.requireAdmin(jwtService)) return@delete
+            val db = persistence ?: return@delete call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage("Database persistence not configured"))
+            val id = call.parameters["id"]?.toLongOrNull()
+                ?: return@delete call.respond(HttpStatusCode.BadRequest, ApiMessage("Invalid target id"))
+            val deleted = db.targets.delete(id)
+            if (!deleted) return@delete call.respond(HttpStatusCode.NotFound, ApiMessage("Target $id not found"))
+            db.monitor.invalidate(id)
+            call.respond(ApiMessage("Target $id deleted"))
+        }
+
+        post("{id}/probe") {
+            if (!call.requireAdmin(jwtService)) return@post
+            val db = persistence ?: return@post call.respond(HttpStatusCode.ServiceUnavailable, ApiMessage("Database persistence not configured"))
+            val id = call.parameters["id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, ApiMessage("Invalid target id"))
+            val target = db.targets.get(id)
+                ?: return@post call.respond(HttpStatusCode.NotFound, ApiMessage("Target $id not found"))
+            val status = db.monitor.probeOnce(target)
+            call.respond(status)
+        }
     }
 
     route("/api/rules") {

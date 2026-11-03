@@ -26,19 +26,27 @@ class LogViewModel @Inject constructor(
     private val _statusFilter = MutableStateFlow(LogStatusFilter.ALL)
     val statusFilter: StateFlow<LogStatusFilter> = _statusFilter.asStateFlow()
 
+    private val _sourceFilter = MutableStateFlow("all") // "all" | "real" | "demo"
+    val sourceFilter: StateFlow<String> = _sourceFilter.asStateFlow()
+
     private val _isStreamingPaused = MutableStateFlow(false)
     val isStreamingPaused: StateFlow<Boolean> = _isStreamingPaused.asStateFlow()
 
     private val _pausedSnapshot = MutableStateFlow<List<RequestLogDto>>(emptyList())
 
+    val lastDataSyncMs: StateFlow<Long> = repository.lastDataSyncMs
+    val persistenceMode: StateFlow<String> = repository.persistenceMode
+    val nextCursor: StateFlow<String?> = repository.nextLogCursor
+
     val logs: StateFlow<List<RequestLogDto>> = combine(
         repository.logs,
         _searchQuery,
         _statusFilter,
+        _sourceFilter,
         _isStreamingPaused
-    ) { liveLogs, query, filter, paused ->
-        val source = if (paused && _pausedSnapshot.value.isNotEmpty()) _pausedSnapshot.value else liveLogs
-        source.filter { log ->
+    ) { liveLogs, query, filter, srcFilter, paused ->
+        val sourceList = if (paused && _pausedSnapshot.value.isNotEmpty()) _pausedSnapshot.value else liveLogs
+        sourceList.filter { log ->
             val matchesQuery = query.isBlank() ||
                     log.path.contains(query, ignoreCase = true) ||
                     log.clientId.contains(query, ignoreCase = true) ||
@@ -51,7 +59,9 @@ class LogViewModel @Inject constructor(
                 LogStatusFilter.ERROR_5XX -> log.status >= 500
             }
 
-            matchesQuery && matchesFilter
+            val matchesSource = srcFilter == "all" || log.source.equals(srcFilter, ignoreCase = true)
+
+            matchesQuery && matchesFilter && matchesSource
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -61,6 +71,24 @@ class LogViewModel @Inject constructor(
 
     fun setStatusFilter(filter: LogStatusFilter) {
         _statusFilter.value = filter
+    }
+
+    fun setSourceFilter(source: String) {
+        _sourceFilter.value = source
+        viewModelScope.launch {
+            repository.fetchLogs(limit = 50, source = source.takeIf { it != "all" })
+        }
+    }
+
+    fun loadMore() {
+        val cur = nextCursor.value ?: return
+        viewModelScope.launch {
+            repository.fetchLogs(
+                limit = 50,
+                cursor = cur,
+                source = _sourceFilter.value.takeIf { it != "all" }
+            )
+        }
     }
 
     fun toggleStreamingPause() {
@@ -76,12 +104,13 @@ class LogViewModel @Inject constructor(
     fun clearLogs() {
         viewModelScope.launch {
             logDao.clearAllLogs()
+            repository.clearLogs()
         }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            repository.refresh()
+            repository.fetchLogs(limit = 50, source = _sourceFilter.value.takeIf { it != "all" })
         }
     }
 }

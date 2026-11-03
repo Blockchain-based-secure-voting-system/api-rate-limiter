@@ -142,9 +142,12 @@ fun EndpointScreen(
                                 )
                                 if (isAdmin) {
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    GlassButton(
+                                    CardPillButton(
                                         text = "+ Add Endpoint",
-                                        accentColor = PolyPrimary,
+                                        icon = Icons.Default.Add,
+                                        containerColor = Nt14Ui.Accent,
+                                        contentColor = Color.White,
+                                        borderColor = null,
                                         onClick = { showAddDialog = true }
                                     )
                                 }

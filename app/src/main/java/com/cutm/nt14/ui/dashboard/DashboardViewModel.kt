@@ -68,7 +68,7 @@ data class DashboardUiState(
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val repository: GatewayRepository,
+    val repository: GatewayRepository,
     private val sessionManager: SessionManager,
     private val authManager: GoogleAuthManager,
     private val wsClient: GatewayWebSocketClient,
@@ -424,5 +424,14 @@ class DashboardViewModel @Inject constructor(
 
     fun clearActionMessage() {
         _actionMessage.value = null
+    }
+
+    fun toggleRole() {
+        viewModelScope.launch {
+            val currentRole = sessionManager.userRole.first()
+            val nextRole = if (currentRole == UserRole.ADMIN) UserRole.VIEWER else UserRole.ADMIN
+            repository.switchRole(nextRole)
+            _actionMessage.value = "Switched to ${nextRole.name} mode"
+        }
     }
 }

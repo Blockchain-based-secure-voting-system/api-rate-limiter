@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cutm.nt14.ui.components.*
+import com.cutm.nt14.ui.monitoring.DataFreshnessBanner
+import com.cutm.nt14.ui.monitoring.LatencySparkline
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -35,8 +37,12 @@ fun ReportScreen(
     viewModel: ReportViewModel = hiltViewModel()
 ) {
     val report by viewModel.report.collectAsState()
+    val metricsSeries by viewModel.metricsSeries.collectAsState()
     val selectedRange by viewModel.selectedRange.collectAsState()
+    val selectedSource by viewModel.selectedSource.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val lastSyncMs by viewModel.lastDataSyncMs.collectAsState()
+    val persistenceMode by viewModel.persistenceMode.collectAsState()
     val context = LocalContext.current
 
     GlassBackground {
@@ -75,14 +81,15 @@ fun ReportScreen(
                             text = "Export CSV",
                             icon = Icons.Default.Share,
                             onClick = {
-                                val csv = viewModel.exportCsvText()
-                                val sendIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, csv)
-                                    type = "text/plain"
+                                viewModel.exportCsv { csv ->
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, csv)
+                                        type = "text/plain"
+                                    }
+                                    val shareIntent = Intent.createChooser(sendIntent, "Export Traffic Audit CSV")
+                                    context.startActivity(shareIntent)
                                 }
-                                val shareIntent = Intent.createChooser(sendIntent, "Export Traffic Audit CSV")
-                                context.startActivity(shareIntent)
                             }
                         )
 
@@ -116,20 +123,34 @@ fun ReportScreen(
             ) {
                 // Range Selector Bar using FilterTile
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("1h" to "1 Hour", "24h" to "24 Hours", "7d" to "7 Days").forEach { (rng, label) ->
-                            val isSel = selectedRange == rng
-                            FilterTile(
-                                label = label,
-                                icon = Icons.Default.Info,
-                                selected = isSel,
-                                badge = rng.uppercase(),
-                                onClick = { viewModel.selectRange(rng) },
-                                modifier = Modifier.weight(1f)
-                            )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DataFreshnessBanner(lastSyncMs = lastSyncMs, persistenceMode = persistenceMode)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("1h" to "1 Hour", "24h" to "24 Hours", "7d" to "7 Days").forEach { (rng, label) ->
+                                val isSel = selectedRange == rng
+                                FilterTile(
+                                    label = label,
+                                    icon = Icons.Default.Info,
+                                    selected = isSel,
+                                    badge = rng.uppercase(),
+                                    onClick = { viewModel.selectRange(rng) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("all" to "All Sources", "real" to "Real Only", "demo" to "Demo Only").forEach { (src, lbl) ->
+                                FilterChip(
+                                    selected = selectedSource == src,
+                                    onClick = { viewModel.selectSource(src) },
+                                    label = { Text(lbl, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                )
+                            }
                         }
                     }
                 }
@@ -164,7 +185,14 @@ fun ReportScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text("Awaiting server aggregation. Tap below to fetch.", fontSize = 12.sp, color = PolyTextSecondary)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                GlassButton(text = "Fetch Report", accentColor = PolyPrimary, onClick = { viewModel.loadReport() })
+                                CardPillButton(
+                                    text = "Fetch Report",
+                                    icon = Icons.Default.Refresh,
+                                    containerColor = Nt14Ui.Accent,
+                                    contentColor = Color.White,
+                                    borderColor = null,
+                                    onClick = { viewModel.loadReport() }
+                                )
                             }
                         }
                     }
@@ -186,7 +214,7 @@ fun ReportScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "AGGREGATE SUMMARY (${rep.range.uppercase()})",
+                                        text = "AGGREGATE SUMMARY (${rep.range.uppercase()} • ${rep.source.uppercase()} • ${rep.persistence.uppercase()})",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = PolyPrimary,
@@ -246,6 +274,25 @@ fun ReportScreen(
                                         value = "${rep.peakRps} rps",
                                         color = PolyCyan
                                     )
+                                    if (metricsSeries != null && metricsSeries!!.points.isNotEmpty()) {
+                                        val pts = metricsSeries!!.points
+                                        Text(
+                                            text = "P95 LATENCY ROLLUP SPARKLINE (metrics_1m: ${pts.size} buckets)",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
+                                        )
+                                        LatencySparkline(
+                                            latencies = pts.map { it.p95.toLong() },
+                                            upFlags = pts.map { it.errors == 0L },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(42.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFFF8FAFC))
+                                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -287,6 +334,25 @@ fun ReportScreen(
                                             GlassBadge(text = "$count reqs", color = PolyPrimary)
                                         }
                                     }
+                                    if (metricsSeries != null && metricsSeries!!.points.isNotEmpty()) {
+                                        val pts = metricsSeries!!.points
+                                        Text(
+                                            text = "P95 LATENCY ROLLUP SPARKLINE (metrics_1m: ${pts.size} buckets)",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
+                                        )
+                                        LatencySparkline(
+                                            latencies = pts.map { it.p95.toLong() },
+                                            upFlags = pts.map { it.errors == 0L },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(42.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFFF8FAFC))
+                                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -327,6 +393,25 @@ fun ReportScreen(
                                             )
                                             GlassBadge(text = "$count reqs", color = PolyPurple)
                                         }
+                                    }
+                                    if (metricsSeries != null && metricsSeries!!.points.isNotEmpty()) {
+                                        val pts = metricsSeries!!.points
+                                        Text(
+                                            text = "P95 LATENCY ROLLUP SPARKLINE (metrics_1m: ${pts.size} buckets)",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PolyTextMuted
+                                        )
+                                        LatencySparkline(
+                                            latencies = pts.map { it.p95.toLong() },
+                                            upFlags = pts.map { it.errors == 0L },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(42.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFFF8FAFC))
+                                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                        )
                                     }
                                 }
                             }

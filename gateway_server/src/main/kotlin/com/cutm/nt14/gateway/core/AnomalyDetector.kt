@@ -38,6 +38,15 @@ class AnomalyDetector(
     // Active bans: clientId -> BanRecord
     private val activeBans = ConcurrentHashMap<String, BanRecord>()
 
+    /** Persistence hooks (set by the application once storage is ready). */
+    @Volatile var onBan: ((clientId: String, record: BanRecord) -> Unit)? = null
+    @Volatile var onUnban: ((clientId: String) -> Unit)? = null
+
+    /** Restores a ban loaded from storage without re-triggering the persistence hook. */
+    fun restoreBan(clientId: String, record: BanRecord) {
+        if (record.bannedUntil > System.currentTimeMillis()) activeBans[clientId] = record
+    }
+
     fun recordAndInspect(
         clientId: String,
         endpoint: String,
@@ -110,11 +119,14 @@ class AnomalyDetector(
         val record = BanRecord(bannedUntil = until, reason = reason)
         activeBans[clientId] = record
         logger.warn("AUTO-BAN TRIGGERED for $clientId: $reason (Banned until $until)")
+        runCatching { onBan?.invoke(clientId, record) }
         return record
     }
 
     fun unbanClient(clientId: String): Boolean {
-        return activeBans.remove(clientId) != null
+        val removed = activeBans.remove(clientId) != null
+        if (removed) runCatching { onUnban?.invoke(clientId) }
+        return removed
     }
 
     fun getActiveBans(): Map<String, BanRecord> = activeBans.toMap()

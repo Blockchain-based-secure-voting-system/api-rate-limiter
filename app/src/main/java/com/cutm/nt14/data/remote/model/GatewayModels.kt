@@ -26,7 +26,19 @@ data class RequestLogDto(
     val path: String,
     val status: Int,
     val latencyMs: Long,
-    val decision: String
+    val decision: String,
+    val source: String = "real",
+    val upstream: String? = null,
+    val clientIpHash: String? = null
+)
+
+data class LogsPageDto(
+    val items: List<RequestLogDto>,
+    val nextCursor: String? = null,
+    val limit: Int = 50,
+    val source: String = "all",
+    val persistence: String = "postgres",
+    val generatedAt: Long = System.currentTimeMillis()
 )
 
 data class IncidentDto(
@@ -34,7 +46,9 @@ data class IncidentDto(
     val type: String,
     val severity: String = "HIGH",
     val detail: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val targetId: Long? = null,
+    val resolvedAt: Long? = null
 )
 
 data class TrafficReportDto(
@@ -48,7 +62,63 @@ data class TrafficReportDto(
     val peakRps: Double,
     val topEndpoints: Map<String, Long>,
     val topClients: Map<String, Long>,
-    val generatedAt: Long = System.currentTimeMillis()
+    val generatedAt: Long = System.currentTimeMillis(),
+    val serverErrors: Long = 0,
+    val source: String = "all",
+    val persistence: String = "memory",
+    val dataFrom: Long = 0,
+    val dataTo: Long = 0,
+    val lastRollupAt: Long = 0
+)
+
+data class MetricsPointDto(
+    val ts: Long,
+    val requests: Long,
+    val allowed: Long,
+    val throttled: Long,
+    val errors: Long,
+    val p50: Double,
+    val p95: Double
+)
+
+data class MetricsSeriesDto(
+    val range: String,
+    val bucketSeconds: Int,
+    val source: String,
+    val points: List<MetricsPointDto>,
+    val lastRollupAt: Long,
+    val generatedAt: Long
+)
+
+data class TargetStatusDto(
+    val id: Long,
+    val name: String,
+    val url: String,
+    val method: String = "GET",
+    val expectedStatus: Int = 200,
+    val intervalSec: Int = 30,
+    val enabled: Boolean = true,
+    val up: Boolean? = null,
+    val lastStatusCode: Int? = null,
+    val lastLatencyMs: Long? = null,
+    val lastError: String? = null,
+    val lastCheckedAt: Long? = null,
+    val consecutiveFailures: Int = 0,
+    val uptimePct24h: Double? = null,
+    val recentLatencies: List<Long> = emptyList(),
+    val recentUp: List<Boolean> = emptyList(),
+    val openIncidentId: String? = null,
+    val transition: String? = null
+)
+
+data class TargetRequestDto(
+    val name: String,
+    val url: String,
+    val method: String = "GET",
+    val expectedStatus: Int = 200,
+    val intervalSec: Int = 30,
+    val timeoutMs: Int = 10_000,
+    val enabled: Boolean = true
 )
 
 data class RateLimitRuleDto(

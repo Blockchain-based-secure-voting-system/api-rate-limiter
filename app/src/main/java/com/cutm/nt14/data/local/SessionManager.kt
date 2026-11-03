@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.cutm.nt14.domain.model.UserRole
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,15 +51,89 @@ class SessionManager @Inject constructor(
     }
 
     private val GATEWAY_HOST = stringPreferencesKey("gateway_host")
+    private val GATEWAY_SELECTION_MODE = stringPreferencesKey("gateway_selection_mode")
+    private val GATEWAY_MANUAL_HOST = stringPreferencesKey("gateway_manual_host")
+    private val GATEWAY_LAN_HOST = stringPreferencesKey("gateway_lan_host")
+    private val GATEWAY_RESOLVED_HOST = stringPreferencesKey("gateway_resolved_host")
+
+    val selectionMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[GATEWAY_SELECTION_MODE] ?: "AUTO"
+    }
+
+    val manualHost: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[GATEWAY_MANUAL_HOST] ?: "127.0.0.1:8000"
+    }
+
+    val lanHost: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[GATEWAY_LAN_HOST] ?: ""
+    }
+
+    val resolvedHost: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[GATEWAY_RESOLVED_HOST] ?: "https://api-rate-limiter-gateway-n0ab.onrender.com"
+    }
 
     val gatewayHost: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[GATEWAY_HOST] ?: "10.0.2.2:8000"
+        prefs[GATEWAY_RESOLVED_HOST] ?: prefs[GATEWAY_HOST] ?: "https://api-rate-limiter-gateway-n0ab.onrender.com"
     }
 
     suspend fun saveGatewayHost(host: String) {
         context.dataStore.edit { prefs ->
             prefs[GATEWAY_HOST] = host
+            prefs[GATEWAY_RESOLVED_HOST] = host
         }
+    }
+
+    suspend fun saveSelectionMode(mode: String) {
+        context.dataStore.edit { prefs ->
+            prefs[GATEWAY_SELECTION_MODE] = mode
+        }
+    }
+
+    suspend fun saveManualHost(host: String) {
+        context.dataStore.edit { prefs ->
+            prefs[GATEWAY_MANUAL_HOST] = host
+        }
+    }
+
+    suspend fun saveLanHost(host: String) {
+        context.dataStore.edit { prefs ->
+            prefs[GATEWAY_LAN_HOST] = host
+        }
+    }
+
+    suspend fun saveResolvedHost(host: String) {
+        context.dataStore.edit { prefs ->
+            prefs[GATEWAY_RESOLVED_HOST] = host
+            prefs[GATEWAY_HOST] = host
+        }
+    }
+
+    private fun hostTokenKey(host: String): androidx.datastore.preferences.core.Preferences.Key<String> {
+        val clean = host.removePrefix("https://").removePrefix("http://").removePrefix("wss://").removePrefix("ws://")
+            .trim().trimEnd('/').replace(":", "_").replace(".", "_").replace("/", "_").lowercase()
+        return stringPreferencesKey("jwt_token_$clean")
+    }
+
+    suspend fun saveTokenForHost(host: String, token: String, role: String? = null, email: String? = null) {
+        val key = hostTokenKey(host)
+        context.dataStore.edit { prefs ->
+            prefs[key] = TokenEncryptor.encrypt(token)
+            prefs[USER_JWT_TOKEN] = TokenEncryptor.encrypt(token)
+            if (role != null) {
+                val userRole = if (role.equals("ADMIN", ignoreCase = true)) UserRole.ADMIN else UserRole.VIEWER
+                prefs[USER_ROLE] = userRole.name
+            }
+            if (email != null) {
+                prefs[USER_EMAIL] = email
+                prefs[USER_NAME] = email.substringBefore("@")
+            }
+        }
+    }
+
+    suspend fun getTokenForHost(host: String): String? {
+        val key = hostTokenKey(host)
+        val prefs = context.dataStore.data.first()
+        return prefs[key]?.let { TokenEncryptor.decrypt(it) }
     }
 
     suspend fun saveSession(
@@ -69,6 +144,8 @@ class SessionManager @Inject constructor(
         provider: String = "google",
         jwtToken: String? = null
     ) {
+        val currentHost = gatewayHost.first()
+        val key = hostTokenKey(currentHost)
         context.dataStore.edit { prefs ->
             prefs[USER_EMAIL] = email
             prefs[USER_NAME] = name
@@ -80,9 +157,12 @@ class SessionManager @Inject constructor(
             }
             prefs[AUTH_PROVIDER] = provider
             if (jwtToken != null) {
-                prefs[USER_JWT_TOKEN] = TokenEncryptor.encrypt(jwtToken)
+                val encrypted = TokenEncryptor.encrypt(jwtToken)
+                prefs[USER_JWT_TOKEN] = encrypted
+                prefs[key] = encrypted
             } else {
                 prefs.remove(USER_JWT_TOKEN)
+                prefs.remove(key)
             }
         }
     }

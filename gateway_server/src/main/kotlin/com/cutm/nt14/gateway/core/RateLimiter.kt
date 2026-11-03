@@ -65,15 +65,28 @@ class RateLimiter {
 
     fun getRule(endpoint: String): RateLimitRule? = rules[endpoint]
 
+    /** Persistence hooks (set by the application after rules are loaded from storage). */
+    @Volatile var onRuleSet: ((RateLimitRule) -> Unit)? = null
+    @Volatile var onRuleRemoved: ((String) -> Unit)? = null
+
+    /** Replaces all rules with the stored set (no persistence hooks fired). */
+    fun replaceAllRules(stored: List<RateLimitRule>) {
+        rules.clear()
+        stored.forEach { rules[it.endpointId] = it }
+        limiters.clear()
+    }
+
     fun setRule(rule: RateLimitRule) {
         rules[rule.endpointId] = rule
         // Invalidate cached limiters for this endpoint so new rules take immediate effect
         limiters.keys.removeIf { it.startsWith("${rule.endpointId}:") }
+        runCatching { onRuleSet?.invoke(rule) }
     }
 
     fun removeRule(endpoint: String): Boolean {
         val removed = rules.remove(endpoint) != null
         limiters.keys.removeIf { it.startsWith("$endpoint:") }
+        if (removed) runCatching { onRuleRemoved?.invoke(endpoint) }
         return removed
     }
 

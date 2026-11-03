@@ -1,16 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Release Configuration: Strict TLS enforcement.
-         Cleartext traffic restricted strictly to localhost loopback (127.0.0.1).
-         Trust ONLY system-installed Certificate Authorities. -->
+    <!-- Release Configuration: Strict TLS enforcement across all domains. -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-    </domain-config>
 </network-security-config>

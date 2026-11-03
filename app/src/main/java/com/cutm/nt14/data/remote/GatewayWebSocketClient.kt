@@ -23,6 +23,7 @@ import com.cutm.nt14.data.local.entities.Endpoint
 import com.cutm.nt14.data.local.entities.RateLimit
 import com.cutm.nt14.data.local.entities.RequestLog
 import com.cutm.nt14.data.remote.model.*
+import com.cutm.nt14.domain.model.UserRole
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,7 @@ import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 sealed class GatewayConnectionState {
@@ -56,7 +58,10 @@ class GatewayWebSocketClient @Inject constructor(
     private val ddosDao: DDoSIncidentDao,
     private val rateLimitDao: RateLimitDao,
     private val endpointDao: EndpointDao,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val resolver: GatewayEndpointResolver,
+    private val authApiProvider: Provider<GatewayAuthApi>,
+    private val firebaseRtdb: FirebaseRealtimeDatabaseManager
 ) {
     private val tag = "GatewayWS"
 
@@ -99,10 +104,27 @@ class GatewayWebSocketClient @Inject constructor(
     private val _liveClients = MutableStateFlow<List<ClientInfoDto>>(emptyList())
     val liveClients: StateFlow<List<ClientInfoDto>> = _liveClients.asStateFlow()
 
+    private val _liveTargets = MutableStateFlow<List<TargetStatusDto>>(emptyList())
+    val liveTargets: StateFlow<List<TargetStatusDto>> = _liveTargets.asStateFlow()
+
+    private val _lastDataSyncMs = MutableStateFlow(0L)
+    val lastDataSyncMs: StateFlow<Long> = _lastDataSyncMs.asStateFlow()
+
+    private val _persistenceMode = MutableStateFlow("postgres")
+    val persistenceMode: StateFlow<String> = _persistenceMode.asStateFlow()
+
+    private val _nextLogCursor = MutableStateFlow<String?>(null)
+    val nextLogCursor: StateFlow<String?> = _nextLogCursor.asStateFlow()
+
     init {
         scope.launch {
-            sessionManager.gatewayHost.collect { host ->
+            resolver.currentEndpoint.collect { host ->
+                val prev = _connectedHost.value
                 _connectedHost.value = host
+                if (prev != host) {
+                    Log.i(tag, "Active endpoint target updated: $host (was $prev). Reconnecting...")
+                    reconnect()
+                }
             }
         }
     }
@@ -125,7 +147,29 @@ class GatewayWebSocketClient @Inject constructor(
     }
 
     private suspend fun attachAuthHeaders(builder: Request.Builder): Request.Builder {
-        val jwt = sessionManager.userJwtToken.first()
+        val currentHost = _connectedHost.value
+        var jwt = sessionManager.getTokenForHost(currentHost)
+        if (jwt.isNullOrBlank()) {
+            val currentRole = sessionManager.userRole.first()
+            if (currentRole == UserRole.ADMIN) {
+                try {
+                    val adminResp = authApiProvider.get().loginAsDevAdmin()
+                    jwt = adminResp.token
+                    sessionManager.saveTokenForHost(currentHost, adminResp.token, adminResp.role, adminResp.email)
+                } catch (e: Exception) {
+                    Log.w(tag, "Auto admin exchange note: ${e.message}")
+                }
+            }
+            if (jwt.isNullOrBlank()) {
+                try {
+                    val guestResp = authApiProvider.get().loginAsGuest()
+                    jwt = guestResp.token
+                    sessionManager.saveTokenForHost(currentHost, guestResp.token, guestResp.role, guestResp.email)
+                } catch (e: Exception) {
+                    Log.w(tag, "Auto guest exchange note on target switch: ${e.message}")
+                }
+            }
+        }
         if (!jwt.isNullOrBlank()) {
             builder.header("Authorization", "Bearer $jwt")
         }
@@ -157,8 +201,10 @@ class GatewayWebSocketClient @Inject constructor(
 
     fun reconnectWithHost(newHost: String) {
         scope.launch {
+            sessionManager.saveSelectionMode("MANUAL")
+            sessionManager.saveManualHost(newHost)
             sessionManager.saveGatewayHost(newHost)
-            reconnect()
+            resolver.resolve(force = true)
         }
     }
 
@@ -222,6 +268,7 @@ class GatewayWebSocketClient @Inject constructor(
                 Log.w(tag, "WebSocket failure on $host [HTTP ${code ?: 0}]: ${t.message}")
                 this@GatewayWebSocketClient.webSocket = null
                 _connectionState.value = GatewayConnectionState.Failed(code, userMsg)
+                resolver.reportFailure(host)
                 scheduleReconnect()
             }
 
@@ -302,6 +349,51 @@ class GatewayWebSocketClient @Inject constructor(
         return clients
     }
 
+    private fun parseTargetJson(tObj: JSONObject): TargetStatusDto {
+        val latencies = mutableListOf<Long>()
+        tObj.optJSONArray("recentLatencies")?.let { arr ->
+            for (i in 0 until arr.length()) latencies.add(arr.optLong(i, 0L))
+        }
+        val ups = mutableListOf<Boolean>()
+        tObj.optJSONArray("recentUp")?.let { arr ->
+            for (i in 0 until arr.length()) ups.add(arr.optBoolean(i, true))
+        }
+        return TargetStatusDto(
+            id = tObj.optLong("id", 0L),
+            name = tObj.optString("name", "Target"),
+            url = tObj.optString("url", ""),
+            method = tObj.optString("method", "GET"),
+            expectedStatus = tObj.optInt("expectedStatus", 200),
+            intervalSec = tObj.optInt("intervalSec", 30),
+            enabled = tObj.optBoolean("enabled", true),
+            up = if (tObj.isNull("up")) null else tObj.optBoolean("up"),
+            lastStatusCode = if (tObj.isNull("lastStatusCode")) null else tObj.optInt("lastStatusCode"),
+            lastLatencyMs = if (tObj.isNull("lastLatencyMs")) null else tObj.optLong("lastLatencyMs"),
+            lastError = tObj.optString("lastError").takeIf { it.isNotBlank() && it != "null" },
+            lastCheckedAt = if (tObj.isNull("lastCheckedAt")) null else tObj.optLong("lastCheckedAt"),
+            consecutiveFailures = tObj.optInt("consecutiveFailures", 0),
+            uptimePct24h = if (tObj.isNull("uptimePct24h")) null else tObj.optDouble("uptimePct24h"),
+            recentLatencies = latencies,
+            recentUp = ups,
+            openIncidentId = tObj.optString("openIncidentId").takeIf { it.isNotBlank() && it != "null" },
+            transition = tObj.optString("transition").takeIf { it.isNotBlank() && it != "null" }
+        )
+    }
+
+    private fun parseLogJson(lObj: JSONObject): RequestLogDto = RequestLogDto(
+        id = lObj.optString("id"),
+        timestamp = lObj.optLong("timestamp"),
+        clientId = lObj.optString("clientId"),
+        method = lObj.optString("method", "GET"),
+        path = lObj.optString("path"),
+        status = lObj.optInt("status"),
+        latencyMs = lObj.optLong("latencyMs"),
+        decision = lObj.optString("decision", "allowed"),
+        source = lObj.optString("source", "real"),
+        upstream = lObj.optString("upstream").takeIf { it.isNotBlank() && it != "null" },
+        clientIpHash = lObj.optString("clientIpHash").takeIf { it.isNotBlank() && it != "null" }
+    )
+
     private fun handleLiveEvent(jsonStr: String) {
         scope.launch {
             try {
@@ -310,9 +402,13 @@ class GatewayWebSocketClient @Inject constructor(
 
                 val id = json.optString("id").takeIf { it.isNotBlank() }
                 if (id != null) lastEventId = id
+                _lastDataSyncMs.value = System.currentTimeMillis()
 
                 when (type) {
                     "snapshot" -> {
+                        json.optString("persistence").takeIf { it.isNotBlank() && it != "null" }?.let {
+                            _persistenceMode.value = it
+                        }
                         // 1. Snapshot metrics
                         val mObj = json.optJSONObject("metrics")
                         if (mObj != null) {
@@ -360,19 +456,7 @@ class GatewayWebSocketClient @Inject constructor(
                         if (lArr != null) {
                             val logs = mutableListOf<RequestLogDto>()
                             for (i in 0 until lArr.length()) {
-                                val lObj = lArr.getJSONObject(i)
-                                logs.add(
-                                    RequestLogDto(
-                                        id = lObj.optString("id"),
-                                        timestamp = lObj.optLong("timestamp"),
-                                        clientId = lObj.optString("clientId"),
-                                        method = lObj.optString("method", "GET"),
-                                        path = lObj.optString("path"),
-                                        status = lObj.optInt("status"),
-                                        latencyMs = lObj.optLong("latencyMs"),
-                                        decision = lObj.optString("decision", "allowed")
-                                    )
-                                )
+                                logs.add(parseLogJson(lArr.getJSONObject(i)))
                             }
                             _liveLogs.value = logs
                             cacheLogsToRoom(logs)
@@ -390,7 +474,9 @@ class GatewayWebSocketClient @Inject constructor(
                                         type = iObj.optString("type"),
                                         severity = iObj.optString("severity", "HIGH"),
                                         detail = iObj.optString("detail"),
-                                        timestamp = iObj.optLong("timestamp")
+                                        timestamp = iObj.optLong("timestamp"),
+                                        targetId = if (iObj.isNull("targetId")) null else iObj.optLong("targetId"),
+                                        resolvedAt = if (iObj.isNull("resolvedAt")) null else iObj.optLong("resolvedAt")
                                     )
                                 )
                             }
@@ -402,6 +488,24 @@ class GatewayWebSocketClient @Inject constructor(
                         if (cArr != null) {
                             _liveClients.value = parseClientsJson(cArr)
                         }
+
+                        // 7. Snapshot monitored targets
+                        val tArr = json.optJSONArray("targets")
+                        if (tArr != null) {
+                            val targets = mutableListOf<TargetStatusDto>()
+                            for (i in 0 until tArr.length()) {
+                                targets.add(parseTargetJson(tArr.getJSONObject(i)))
+                            }
+                            _liveTargets.value = targets
+                        }
+                    }
+
+                    "target_status" -> {
+                        val tObj = json.optJSONObject("target") ?: json
+                        val statusDto = parseTargetJson(tObj)
+                        val updated = _liveTargets.value.filter { it.id != statusDto.id }.toMutableList()
+                        updated.add(statusDto)
+                        _liveTargets.value = updated.sortedBy { it.id }
                     }
 
                     "client_update" -> {
@@ -466,15 +570,24 @@ class GatewayWebSocketClient @Inject constructor(
                         _liveBans.value = _liveBans.value.filter { it.clientId != clientId }
                     }
 
-                    "incident" -> {
+                    "incident", "incident_resolved" -> {
+                        val iObj = json.optJSONObject("incident") ?: json
                         val inc = IncidentDto(
-                            id = json.optString("id", "inc_" + UUID.randomUUID().toString().take(6)),
-                            type = json.optString("type", "Security Incident"),
-                            severity = json.optString("severity", "HIGH"),
-                            detail = json.optString("detail"),
-                            timestamp = json.optLong("timestamp", System.currentTimeMillis())
+                            id = iObj.optString("id", "inc_" + UUID.randomUUID().toString().take(6)),
+                            type = iObj.optString("type", "Security Incident"),
+                            severity = iObj.optString("severity", "HIGH"),
+                            detail = iObj.optString("detail"),
+                            timestamp = iObj.optLong("timestamp", System.currentTimeMillis()),
+                            targetId = if (iObj.isNull("targetId")) null else iObj.optLong("targetId"),
+                            resolvedAt = if (iObj.isNull("resolvedAt")) null else iObj.optLong("resolvedAt")
                         )
-                        _liveIncidents.value = listOf(inc) + _liveIncidents.value
+                        _liveIncidents.value = listOf(inc) + _liveIncidents.value.filter { it.id != inc.id }
+                        if (type == "incident" && inc.type == "Target Down") {
+                            showNotification(
+                                title = "Target Down: ${inc.severity}",
+                                body = inc.detail
+                            )
+                        }
                     }
 
                     "request", "blocked_request", "ip_blocked" -> {
@@ -485,6 +598,8 @@ class GatewayWebSocketClient @Inject constructor(
                         val timestamp = (json.optDouble("timestamp", System.currentTimeMillis() / 1000.0) * 1000).toLong()
                         val method = json.optString("method", "GET")
                         val decision = json.optString("decision", if (status == 429) "token_bucket" else "allowed")
+                        val source = json.optString("source", "real")
+                        val upstream = json.optString("upstream").takeIf { it.isNotBlank() && it != "null" }
                         val logId = id ?: ("log_" + UUID.randomUUID().toString().take(8))
 
                         val logDto = RequestLogDto(
@@ -495,12 +610,14 @@ class GatewayWebSocketClient @Inject constructor(
                             path = endpoint,
                             status = status,
                             latencyMs = latency,
-                            decision = decision
+                            decision = decision,
+                            source = source,
+                            upstream = upstream
                         )
 
                         _liveLogs.value = (listOf(logDto) + _liveLogs.value).take(200)
 
-                        // Cache in Room
+                        // Cache in Room & Sync to Firebase Realtime Database
                         val log = RequestLog(
                             logId = logId,
                             endpointId = endpoint,
@@ -512,6 +629,7 @@ class GatewayWebSocketClient @Inject constructor(
                             syncStatus = SyncStatus.SYNCED
                         )
                         logDao.insertLog(log)
+                        firebaseRtdb.syncRequestLog(log)
 
                         if (type == "ip_blocked" || type == "blocked_request" || status == 429) {
                             val eventId = "ae_" + UUID.randomUUID().toString().take(8)
@@ -525,6 +643,7 @@ class GatewayWebSocketClient @Inject constructor(
                                 syncStatus = SyncStatus.SYNCED
                             )
                             abuseDao.insertEvent(abuseEvent)
+                            firebaseRtdb.syncAbuseEvent(abuseEvent)
 
                             val incidentId = "ddos_" + UUID.randomUUID().toString().take(8)
                             val incident = DDoSIncident(
@@ -537,6 +656,7 @@ class GatewayWebSocketClient @Inject constructor(
                                 syncStatus = SyncStatus.SYNCED
                             )
                             ddosDao.insertIncident(incident)
+                            firebaseRtdb.syncDDoSIncident(incident)
 
                             val incDto = IncidentDto(
                                 id = incidentId,
@@ -610,7 +730,9 @@ class GatewayWebSocketClient @Inject constructor(
         fetchRules()
         fetchBans()
         fetchClients()
+        fetchTargetsStatus()
         fetchLogs(50)
+        _lastDataSyncMs.value = System.currentTimeMillis()
     }
 
     suspend fun fetchStats(): GatewayMetrics? = withContext(Dispatchers.IO) {
@@ -845,8 +967,9 @@ class GatewayWebSocketClient @Inject constructor(
         }
     }
 
-    suspend fun fetchReports(range: String = "1h"): TrafficReportDto? = withContext(Dispatchers.IO) {
-        val url = buildHttpUrl(_connectedHost.value, "/api/reports?range=$range")
+    suspend fun fetchReports(range: String = "1h", source: String? = null): TrafficReportDto? = withContext(Dispatchers.IO) {
+        val srcQuery = if (!source.isNullOrBlank() && source != "all") "&source=$source" else ""
+        val url = buildHttpUrl(_connectedHost.value, "/api/reports?range=$range$srcQuery")
         try {
             val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
@@ -861,6 +984,10 @@ class GatewayWebSocketClient @Inject constructor(
                     val topClObj = obj.optJSONObject("topClients")
                     topClObj?.keys()?.forEach { k -> topClientsMap[k] = topClObj.optLong(k) }
 
+                    val persistence = obj.optString("persistence", "postgres")
+                    _persistenceMode.value = persistence
+                    _lastDataSyncMs.value = System.currentTimeMillis()
+
                     TrafficReportDto(
                         range = obj.optString("range", range),
                         totalRequests = obj.optLong("totalRequests"),
@@ -872,7 +999,13 @@ class GatewayWebSocketClient @Inject constructor(
                         peakRps = obj.optDouble("peakRps"),
                         topEndpoints = topEndpointsMap,
                         topClients = topClientsMap,
-                        generatedAt = obj.optLong("generatedAt", System.currentTimeMillis())
+                        generatedAt = obj.optLong("generatedAt", System.currentTimeMillis()),
+                        serverErrors = obj.optLong("serverErrors", 0L),
+                        source = obj.optString("source", source ?: "all"),
+                        persistence = persistence,
+                        dataFrom = obj.optLong("dataFrom", 0L),
+                        dataTo = obj.optLong("dataTo", 0L),
+                        lastRollupAt = obj.optLong("lastRollupAt", 0L)
                     )
                 } else null
             }
@@ -881,33 +1014,89 @@ class GatewayWebSocketClient @Inject constructor(
         }
     }
 
-    suspend fun fetchLogs(limit: Int = 50, cursor: String? = null): List<RequestLogDto> = withContext(Dispatchers.IO) {
+    suspend fun fetchMetricsSeries(range: String = "1h", source: String? = null): MetricsSeriesDto? = withContext(Dispatchers.IO) {
+        val srcQuery = if (!source.isNullOrBlank() && source != "all") "&source=$source" else ""
+        val url = buildHttpUrl(_connectedHost.value, "/api/metrics?range=$range$srcQuery")
+        try {
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val obj = JSONObject(resp.body?.string().orEmpty())
+                val ptsArr = obj.optJSONArray("points") ?: JSONArray()
+                val pts = mutableListOf<MetricsPointDto>()
+                for (i in 0 until ptsArr.length()) {
+                    val p = ptsArr.getJSONObject(i)
+                    pts.add(
+                        MetricsPointDto(
+                            ts = p.optLong("ts"),
+                            requests = p.optLong("requests"),
+                            allowed = p.optLong("allowed"),
+                            throttled = p.optLong("throttled"),
+                            errors = p.optLong("errors"),
+                            p50 = p.optDouble("p50", 0.0),
+                            p95 = p.optDouble("p95", 0.0)
+                        )
+                    )
+                }
+                _lastDataSyncMs.value = System.currentTimeMillis()
+                MetricsSeriesDto(
+                    range = obj.optString("range", range),
+                    bucketSeconds = obj.optInt("bucketSeconds", 60),
+                    source = obj.optString("source", source ?: "all"),
+                    points = pts,
+                    lastRollupAt = obj.optLong("lastRollupAt", 0L),
+                    generatedAt = obj.optLong("generatedAt", System.currentTimeMillis())
+                )
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun fetchLogs(
+        limit: Int = 50,
+        cursor: String? = null,
+        source: String? = null,
+        status: String? = null,
+        clientQuery: String? = null
+    ): List<RequestLogDto> = withContext(Dispatchers.IO) {
         val cursorQuery = if (!cursor.isNullOrBlank()) "&cursor=$cursor" else ""
-        val url = buildHttpUrl(_connectedHost.value, "/api/logs?limit=$limit$cursorQuery")
+        val srcQuery = if (!source.isNullOrBlank() && source != "all") "&source=$source" else ""
+        val statusQuery = if (!status.isNullOrBlank()) "&status=$status" else ""
+        val clientParam = if (!clientQuery.isNullOrBlank()) "&client=$clientQuery" else ""
+        val url = buildHttpUrl(_connectedHost.value, "/api/logs?limit=$limit$cursorQuery$srcQuery$statusQuery$clientParam")
         try {
             val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
             client.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) {
-                    val body = resp.body?.string().orEmpty()
-                    val arr = JSONArray(body)
+                    val body = resp.body?.string()?.trim().orEmpty()
                     val list = mutableListOf<RequestLogDto>()
-                    for (i in 0 until arr.length()) {
-                        val obj = arr.getJSONObject(i)
-                        list.add(
-                            RequestLogDto(
-                                id = obj.optString("id"),
-                                timestamp = obj.optLong("timestamp"),
-                                clientId = obj.optString("clientId"),
-                                method = obj.optString("method", "GET"),
-                                path = obj.optString("path"),
-                                status = obj.optInt("status"),
-                                latencyMs = obj.optLong("latencyMs"),
-                                decision = obj.optString("decision", "allowed")
-                            )
-                        )
+                    var nextCur: String? = resp.header("X-Next-Cursor")
+                    if (body.startsWith("{")) {
+                        val pageObj = JSONObject(body)
+                        pageObj.optString("persistence").takeIf { it.isNotBlank() }?.let { _persistenceMode.value = it }
+                        nextCur = pageObj.optString("nextCursor").takeIf { it.isNotBlank() && it != "null" } ?: nextCur
+                        val arr = pageObj.optJSONArray("items") ?: JSONArray()
+                        for (i in 0 until arr.length()) {
+                            list.add(parseLogJson(arr.getJSONObject(i)))
+                        }
+                    } else if (body.startsWith("[")) {
+                        val arr = JSONArray(body)
+                        for (i in 0 until arr.length()) {
+                            list.add(parseLogJson(arr.getJSONObject(i)))
+                        }
+                    }
+                    _nextLogCursor.value = nextCur
+                    _lastDataSyncMs.value = System.currentTimeMillis()
+                    if (cursor.isNullOrBlank()) {
+                        if (list.isNotEmpty() || !source.isNullOrBlank() || !status.isNullOrBlank()) {
+                            _liveLogs.value = list
+                        }
+                    } else if (list.isNotEmpty()) {
+                        val existingIds = _liveLogs.value.map { it.id }.toSet()
+                        _liveLogs.value = _liveLogs.value + list.filter { it.id !in existingIds }
                     }
                     if (list.isNotEmpty()) {
-                        _liveLogs.value = list
                         cacheLogsToRoom(list)
                     }
                     list
@@ -915,6 +1104,99 @@ class GatewayWebSocketClient @Inject constructor(
             }
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    suspend fun fetchTargetsStatus(): List<TargetStatusDto> = withContext(Dispatchers.IO) {
+        val url = buildHttpUrl(_connectedHost.value, "/api/targets/status")
+        try {
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val arr = JSONArray(resp.body?.string().orEmpty())
+                val list = mutableListOf<TargetStatusDto>()
+                for (i in 0 until arr.length()) {
+                    list.add(parseTargetJson(arr.getJSONObject(i)))
+                }
+                _liveTargets.value = list
+                _lastDataSyncMs.value = System.currentTimeMillis()
+                list
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun createTarget(reqDto: TargetRequestDto): Boolean = withContext(Dispatchers.IO) {
+        val url = buildHttpUrl(_connectedHost.value, "/api/targets")
+        try {
+            val json = JSONObject().apply {
+                put("name", reqDto.name)
+                put("url", reqDto.url)
+                put("method", reqDto.method)
+                put("expectedStatus", reqDto.expectedStatus)
+                put("intervalSec", reqDto.intervalSec)
+                put("timeoutMs", reqDto.timeoutMs)
+                put("enabled", reqDto.enabled)
+            }.toString()
+            val req = attachAuthHeaders(
+                Request.Builder().url(url).post(json.toRequestBody("application/json".toMediaType()))
+            ).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    fetchTargetsStatus()
+                    true
+                } else false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun deleteTarget(id: Long): Boolean = withContext(Dispatchers.IO) {
+        val url = buildHttpUrl(_connectedHost.value, "/api/targets/$id")
+        try {
+            val req = attachAuthHeaders(Request.Builder().url(url).delete()).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    fetchTargetsStatus()
+                    true
+                } else false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun probeTargetNow(id: Long): TargetStatusDto? = withContext(Dispatchers.IO) {
+        val url = buildHttpUrl(_connectedHost.value, "/api/targets/$id/probe")
+        try {
+            val req = attachAuthHeaders(
+                Request.Builder().url(url).post("{}".toRequestBody("application/json".toMediaType()))
+            ).build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val dto = parseTargetJson(JSONObject(resp.body?.string().orEmpty()))
+                val updated = _liveTargets.value.filter { it.id != dto.id }.toMutableList()
+                updated.add(dto)
+                _liveTargets.value = updated.sortedBy { it.id }
+                dto
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun downloadCsvExport(source: String? = null): String? = withContext(Dispatchers.IO) {
+        val srcQuery = if (!source.isNullOrBlank() && source != "all") "&source=$source" else ""
+        val url = buildHttpUrl(_connectedHost.value, "/api/export?format=csv$srcQuery")
+        try {
+            val req = attachAuthHeaders(Request.Builder().url(url).get()).build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.string() else null
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
