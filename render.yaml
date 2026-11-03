@@ -27,3 +27,5 @@ services:
         value: "akpolylance@gmail.com"
       - key: POLYLANCE_BASE_URL
         value: "https://polylance-fv-1-45wy.onrender.com"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
