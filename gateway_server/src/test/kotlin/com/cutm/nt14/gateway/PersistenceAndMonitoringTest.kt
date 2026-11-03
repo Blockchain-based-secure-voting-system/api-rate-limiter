@@ -503,7 +503,31 @@ class PersistenceAndMonitoringTest {
                 assertEquals(3, snapshot.targets?.size)
                 session.close()
 
-                // 4. Print live PostgreSQL SELECT count(*) evidence across all 8 schema tables
+                // 4. Verify admin can ban a client from GET /api/clients even when client IDs are masked/hashed in storage
+                val clientsAfterRestart = json.decodeFromString<List<ClientInfo>>(
+                    client.get("/api/clients") {
+                        header(HttpHeaders.Authorization, "Bearer $adminToken")
+                    }.bodyAsText()
+                )
+                assertTrue(clientsAfterRestart.isNotEmpty())
+                val storedClient = clientsAfterRestart.first()
+                assertTrue(storedClient.id.startsWith("iphash:"))
+                assertEquals("ip:198.51.100.x", storedClient.maskedId)
+
+                val banResp = client.post("/api/bans") {
+                    header(HttpHeaders.Authorization, "Bearer $adminToken")
+                    contentType(ContentType.Application.Json)
+                    setBody(json.encodeToString(CreateBanRequest(clientId = storedClient.id, reason = "Admin ban from Clients tab", durationMinutes = 15)))
+                }
+                assertEquals(HttpStatusCode.Created, banResp.status)
+
+                // Subsequent request from 198.51.100.200 on an unexhausted route (/api/polylance/talents) is blocked by the ban
+                val blockedByBan = client.get("/api/polylance/talents") {
+                    header("X-Forwarded-For", "198.51.100.200")
+                }
+                assertEquals(HttpStatusCode.TooManyRequests, blockedByBan.status)
+
+                // 5. Print live PostgreSQL SELECT count(*) evidence across all 8 schema tables
                 db.withConnection { c ->
                     println("=== POSTGRESQL DURABLE STORAGE EVIDENCE (SELECT count(*)) ===")
                     for (tbl in listOf("request_logs", "metrics_1m", "clients", "bans", "rules", "incidents", "monitored_targets", "probe_results")) {

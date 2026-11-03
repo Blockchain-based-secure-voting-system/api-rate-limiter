@@ -46,11 +46,11 @@ sealed class Screen(val route: String, val title: String = "", val icon: android
     object Splash : Screen("splash")
     object Login : Screen("login")
     object BiometricLock : Screen("biometric_lock")
-    object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Home)
+    object Dashboard : Screen("dashboard", "Dash", Icons.Default.Home)
     object Monitoring : Screen("monitoring", "Monitor", Icons.Default.CheckCircle)
     object Endpoints : Screen("endpoints", "Endpoints", Icons.AutoMirrored.Filled.List)
     object Logs : Screen("logs", "Logs", Icons.Default.Info)
-    object RateLimits : Screen("ratelimits", "Limits", Icons.Default.Settings)
+    object RateLimits : Screen("ratelimits", "Rules", Icons.Default.Settings)
     object Incidents : Screen("incidents", "Security", Icons.Default.Warning)
     object Reports : Screen("reports", "Reports", Icons.Default.Share)
 }
@@ -250,7 +250,35 @@ fun NT14NavHost(repository: GatewayRepository) {
                     composable(Screen.Monitoring.route) { MonitoringScreen() }
                     composable(Screen.Endpoints.route) { EndpointScreen() }
                     composable(Screen.Logs.route) { LogScreen() }
-                    composable(Screen.RateLimits.route) { RateLimitScreen() }
+                    composable(Screen.RateLimits.route) {
+                        var subTab by remember { mutableStateOf("limits") }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                com.cutm.nt14.ui.components.CardPillButton(
+                                    text = "Rate Limits",
+                                    onClick = { subTab = "limits" },
+                                    containerColor = if (subTab == "limits") com.cutm.nt14.ui.components.PolyPrimary else Color(0xFFE2E8F0),
+                                    contentColor = if (subTab == "limits") Color.White else com.cutm.nt14.ui.components.PolyTextPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                com.cutm.nt14.ui.components.CardPillButton(
+                                    text = "Endpoints",
+                                    onClick = { subTab = "endpoints" },
+                                    containerColor = if (subTab == "endpoints") com.cutm.nt14.ui.components.PolyPrimary else Color(0xFFE2E8F0),
+                                    contentColor = if (subTab == "endpoints") Color.White else com.cutm.nt14.ui.components.PolyTextPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (subTab == "limits") RateLimitScreen() else EndpointScreen()
+                            }
+                        }
+                    }
                     composable(Screen.Incidents.route) { IncidentScreen() }
                     composable(Screen.Reports.route) { ReportScreen() }
                 }

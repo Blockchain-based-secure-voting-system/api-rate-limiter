@@ -168,6 +168,39 @@ class LogRepository(private val db: GatewayDatabase) {
 
     private fun csv(v: String): String =
         if (v.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + v.replace("\"", "\"\"") + "\"" else v
+
+    fun listClients(isAdmin: Boolean, anomalyDetector: com.cutm.nt14.gateway.core.AnomalyDetector? = null, limit: Int = 50): List<ClientInfo> = db.withConnection { c ->
+        val out = mutableListOf<ClientInfo>()
+        c.prepareStatement(
+            "SELECT id, label, source, last_seen, total_requests, throttled_count FROM clients ORDER BY last_seen DESC LIMIT ?"
+        ).use { ps ->
+            ps.setInt(1, limit)
+            ps.executeQuery().use { rs ->
+                while (rs.next()) {
+                    val key = rs.getString("id")
+                    val label = rs.getString("label")
+                    val isBanned = (anomalyDetector?.isBanned(key) == true) || (anomalyDetector?.isBanned(label) == true)
+                    val throttled = rs.getLong("throttled_count")
+                    val status = when {
+                        isBanned -> "banned"
+                        throttled > 0 -> "throttled"
+                        else -> "active"
+                    }
+                    out += ClientInfo(
+                        id = if (isAdmin) key else label,
+                        maskedId = label,
+                        requestsPerMin = 0.0,
+                        totalRequests = rs.getLong("total_requests"),
+                        throttledCount = throttled,
+                        lastSeen = rs.getTimestamp("last_seen").time,
+                        status = status,
+                        isDemo = rs.getString("source") == "demo"
+                    )
+                }
+            }
+        }
+        out
+    }
 }
 
 class MetricsRepository(private val db: GatewayDatabase) {

@@ -98,21 +98,23 @@ class GatewayEndpointResolver private constructor(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     init {
-        scope.launch {
-            try {
-                val savedResolved = sessionManager?.resolvedHost?.first() ?: CLOUD_DEFAULT_URL
-                _currentEndpoint.value = savedResolved
-                _endpointType.value = if (isLocalHost(savedResolved)) EndpointType.LOCAL else EndpointType.CLOUD
-                _state.value = ResolverState.Connected(savedResolved, _endpointType.value)
-            } catch (e: Exception) {
-                _currentEndpoint.value = CLOUD_DEFAULT_URL
-                _endpointType.value = EndpointType.CLOUD
-                _state.value = ResolverState.Connected(CLOUD_DEFAULT_URL, EndpointType.CLOUD)
-            }
+        if (marker == null) {
+            scope.launch {
+                try {
+                    val savedResolved = sessionManager?.resolvedHost?.first() ?: CLOUD_DEFAULT_URL
+                    _currentEndpoint.value = savedResolved
+                    _endpointType.value = if (isLocalHost(savedResolved)) EndpointType.LOCAL else EndpointType.CLOUD
+                    _state.value = ResolverState.Connected(savedResolved, _endpointType.value)
+                } catch (e: Exception) {
+                    _currentEndpoint.value = CLOUD_DEFAULT_URL
+                    _endpointType.value = EndpointType.CLOUD
+                    _state.value = ResolverState.Connected(CLOUD_DEFAULT_URL, EndpointType.CLOUD)
+                }
 
-            registerNetworkMonitor()
-            startPeriodicLocalCheck()
-            resolve(force = true)
+                registerNetworkMonitor()
+                startPeriodicLocalCheck()
+                resolve(force = true)
+            }
         }
     }
 
@@ -331,19 +333,24 @@ class GatewayEndpointResolver private constructor(
     }
 
     private fun isEmulatorDevice(): Boolean {
-        return (Build.FINGERPRINT.startsWith("generic")
-                || Build.FINGERPRINT.startsWith("unknown")
-                || Build.MODEL.contains("google_sdk")
-                || Build.MODEL.contains("Emulator")
-                || Build.MODEL.contains("Android SDK built for x86")
-                || Build.MANUFACTURER.contains("Genymotion")
-                || Build.HARDWARE.contains("goldfish")
-                || Build.HARDWARE.contains("ranchu")
-                || Build.PRODUCT.contains("sdk_gphone")
-                || Build.PRODUCT.contains("google_sdk")
-                || Build.PRODUCT.contains("sdk")
-                || Build.PRODUCT.contains("sdk_x86")
-                || Build.PRODUCT.contains("vbox86p")
-                || Build.PRODUCT.contains("emulator"))
+        val fp = Build.FINGERPRINT ?: return false
+        val model = Build.MODEL ?: ""
+        val manufacturer = Build.MANUFACTURER ?: ""
+        val hardware = Build.HARDWARE ?: ""
+        val product = Build.PRODUCT ?: ""
+        return (fp.startsWith("generic")
+                || fp.startsWith("unknown")
+                || model.contains("google_sdk")
+                || model.contains("Emulator")
+                || model.contains("Android SDK built for x86")
+                || manufacturer.contains("Genymotion")
+                || hardware.contains("goldfish")
+                || hardware.contains("ranchu")
+                || product.contains("sdk_gphone")
+                || product.contains("google_sdk")
+                || product.contains("sdk")
+                || product.contains("sdk_x86")
+                || product.contains("vbox86p")
+                || product.contains("emulator"))
     }
 }

@@ -1,5 +1,6 @@
 package com.cutm.nt14.gateway.core
 
+import com.cutm.nt14.gateway.db.IpPrivacy
 import com.cutm.nt14.gateway.models.GatewayEvent
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -103,13 +104,32 @@ class AnomalyDetector(
         return null
     }
 
-    fun checkBan(clientId: String): BanRecord? {
-        val ban = activeBans[clientId] ?: return null
-        if (System.currentTimeMillis() > ban.bannedUntil) {
-            activeBans.remove(clientId)
-            return null
+    private fun candidateKeys(clientId: String): List<String> {
+        val keys = LinkedHashSet<String>()
+        keys.add(clientId)
+        val raw = clientId.removePrefix("ip:")
+        keys.add(raw)
+        keys.add(IpPrivacy.storedClientId(raw))
+        keys.add(ClientTracker.maskId(raw))
+        if (IpPrivacy.looksLikeIp(raw)) {
+            val hash = IpPrivacy.hash(raw)
+            keys.add(hash)
+            keys.add("iphash:$hash")
         }
-        return ban
+        return keys.toList()
+    }
+
+    fun checkBan(clientId: String): BanRecord? {
+        val now = System.currentTimeMillis()
+        for (key in candidateKeys(clientId)) {
+            val ban = activeBans[key] ?: continue
+            if (now > ban.bannedUntil) {
+                activeBans.remove(key)
+                continue
+            }
+            return ban
+        }
+        return null
     }
 
     fun isBanned(clientId: String): Boolean = checkBan(clientId) != null
@@ -124,8 +144,13 @@ class AnomalyDetector(
     }
 
     fun unbanClient(clientId: String): Boolean {
-        val removed = activeBans.remove(clientId) != null
-        if (removed) runCatching { onUnban?.invoke(clientId) }
+        var removed = false
+        for (key in candidateKeys(clientId)) {
+            if (activeBans.remove(key) != null) {
+                removed = true
+                runCatching { onUnban?.invoke(key) }
+            }
+        }
         return removed
     }
 

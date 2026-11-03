@@ -63,8 +63,27 @@ fun Route.ruleRoutes(
     get("/api/clients") {
         val claims = call.requireAuth(jwtService) ?: return@get
         val isAdmin = claims.role == "ADMIN"
-        val clients = clientTracker.getAllClients(isAdmin, rateLimiter.anomalyDetector)
-        call.respond(clients)
+        val liveClients = clientTracker.getAllClients(isAdmin, rateLimiter.anomalyDetector)
+        if (persistence != null) {
+            if (persistence.writer.pending() > 0) runCatching { persistence.writer.flushNow() }
+            val dbClients = runCatching { persistence.logs.listClients(isAdmin, rateLimiter.anomalyDetector) }.getOrDefault(emptyList())
+            val liveKeys = liveClients.flatMap { c ->
+                val raw = c.id.removePrefix("ip:")
+                val hashKey = if (com.cutm.nt14.gateway.db.IpPrivacy.looksLikeIp(raw)) {
+                    "iphash:${com.cutm.nt14.gateway.db.IpPrivacy.hash(raw)}"
+                } else null
+                listOfNotNull(
+                    c.id,
+                    c.maskedId,
+                    com.cutm.nt14.gateway.db.IpPrivacy.storedClientId(raw),
+                    hashKey
+                )
+            }.toSet()
+            val merged = liveClients + dbClients.filter { it.id !in liveKeys && it.maskedId !in liveKeys }
+            call.respond(merged)
+        } else {
+            call.respond(liveClients)
+        }
     }
 
     // GET /api/stats -> live telemetry & server health (requires valid JWT)
