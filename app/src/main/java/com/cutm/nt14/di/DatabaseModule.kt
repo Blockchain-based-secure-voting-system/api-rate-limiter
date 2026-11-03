@@ -2,39 +2,41 @@ package com.cutm.nt14.di
 
 import android.content.Context
 import androidx.room.Room
-import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.cutm.nt14.data.local.NT14Database
-import com.cutm.nt14.data.local.SyncStatus
-import com.cutm.nt14.data.local.entities.*
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.runBlocking
-import java.util.concurrent.Executors
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_AbuseEvents_logId` ON `AbuseEvents` (`logId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_DDoSIncidents_endpointId` ON `DDoSIncidents` (`endpointId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_RequestLogs_endpointId` ON `RequestLogs` (`endpointId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_RateLimits_endpointId` ON `RateLimits` (`endpointId`)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): NT14Database {
-        lateinit var database: NT14Database
-        database = Room.databaseBuilder(
+        return Room.databaseBuilder(
             context,
             NT14Database::class.java,
             "nt14_database"
         )
+        .addMigrations(MIGRATION_2_3)
         .fallbackToDestructiveMigration()
         .build()
-        return database
     }
-
-
 
     @Provides
     fun provideEndpointDao(db: NT14Database) = db.endpointDao()

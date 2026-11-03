@@ -2,6 +2,7 @@ package com.cutm.nt14.data.local.entities
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.cutm.nt14.data.local.SyncStatus
 
@@ -14,7 +15,8 @@ import com.cutm.nt14.data.local.SyncStatus
             childColumns = ["endpointId"],
             onDelete = ForeignKey.CASCADE
         )
-    ]
+    ],
+    indices = [Index("endpointId")]
 )
 data class RequestLog(
     @PrimaryKey
