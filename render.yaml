@@ -28,4 +28,4 @@ services:
       - key: POLYLANCE_BASE_URL
         value: "https://polylance-fv-1-45wy.onrender.com"
       - key: GOOGLE_CLIENT_ID
-        sync: false
+        value: "589442578334-c07uh623kie143m2blh3i9an6u52i5si.apps.googleusercontent.com"
