@@ -62,19 +62,19 @@ Or run a custom query:
 ### 2. Query REST Endpoints
 ```powershell
 # 1. Keyset-paginated logs (filterable by source=real|demo, status=200|429|5xx, client, from, to)
-curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-n0ab.onrender.com/api/logs?limit=20&source=real"
+curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-qgfy.onrender.com/api/logs?limit=20&source=real"
 
 # 2. Time-series rollups from metrics_1m (range=1h|24h|7d)
-curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-n0ab.onrender.com/api/metrics?range=1h&source=real"
+curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-qgfy.onrender.com/api/metrics?range=1h&source=real"
 
 # 3. Aggregated traffic report from PostgreSQL
-curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-n0ab.onrender.com/api/reports?range=24h&source=real"
+curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-qgfy.onrender.com/api/reports?range=24h&source=real"
 
 # 4. Monitored upstream targets & latency sparklines
-curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-n0ab.onrender.com/api/targets/status"
+curl.exe -s -H "Authorization: Bearer $TOKEN" "https://api-rate-limiter-gateway-qgfy.onrender.com/api/targets/status"
 
 # 5. Admin CSV export
-curl.exe -s -H "Authorization: Bearer $ADMIN_TOKEN" "https://api-rate-limiter-gateway-n0ab.onrender.com/api/export?format=csv&source=real" -o logs.csv
+curl.exe -s -H "Authorization: Bearer $ADMIN_TOKEN" "https://api-rate-limiter-gateway-qgfy.onrender.com/api/export?format=csv&source=real" -o logs.csv
 ```
 
 ### 3. Run Automated Persistence & Monitoring Tests

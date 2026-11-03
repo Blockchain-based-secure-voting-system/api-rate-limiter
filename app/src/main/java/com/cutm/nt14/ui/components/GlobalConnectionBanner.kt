@@ -303,7 +303,7 @@ fun GatewayHostConfigDialog(
                                 color = PolyTextPrimary
                             )
                             Text(
-                                text = "1. Local USB (127.0.0.1:8000 via adb reverse)\n2. Emulator (10.0.2.2:8000 on emulators only)\n3. Saved LAN Host (if specified below)\n4. Cloud Gateway (https://api-rate-limiter-gateway-n0ab.onrender.com)",
+                                text = "1. Local USB (127.0.0.1:8000 via adb reverse)\n2. Emulator (10.0.2.2:8000 on emulators only)\n3. Saved LAN Host (if specified below)\n4. Cloud Gateway (https://api-rate-limiter-gateway-qgfy.onrender.com)",
                                 fontSize = 10.sp,
                                 color = PolyTextSecondary,
                                 lineHeight = 14.sp

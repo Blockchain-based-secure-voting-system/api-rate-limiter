@@ -61,7 +61,7 @@ class GatewayEndpointResolver private constructor(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
-        const val CLOUD_DEFAULT_URL = "https://api-rate-limiter-gateway-n0ab.onrender.com"
+        const val CLOUD_DEFAULT_URL = "https://api-rate-limiter-gateway-qgfy.onrender.com"
         const val LOCAL_USB_HOST = "127.0.0.1:8000"
         const val EMULATOR_HOST = "10.0.2.2:8000"
         const val LOCAL_PROBE_TIMEOUT_MS = 1500L
@@ -101,7 +101,8 @@ class GatewayEndpointResolver private constructor(
         if (marker == null) {
             scope.launch {
                 try {
-                    val savedResolved = sessionManager?.resolvedHost?.first() ?: CLOUD_DEFAULT_URL
+                    val rawSaved = sessionManager?.resolvedHost?.first() ?: CLOUD_DEFAULT_URL
+                    val savedResolved = if (rawSaved.contains("api-rate-limiter-gateway-n0ab.onrender.com")) CLOUD_DEFAULT_URL else rawSaved
                     _currentEndpoint.value = savedResolved
                     _endpointType.value = if (isLocalHost(savedResolved)) EndpointType.LOCAL else EndpointType.CLOUD
                     _state.value = ResolverState.Connected(savedResolved, _endpointType.value)

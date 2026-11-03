@@ -11,7 +11,7 @@
 param(
     [string]$GatewayServiceName = "api-rate-limiter-gateway",
     [string]$DatabaseName = "nt14-gateway-db",
-    [string]$GatewayPublicUrl = "https://api-rate-limiter-gateway-n0ab.onrender.com"
+    [string]$GatewayPublicUrl = "https://api-rate-limiter-gateway-qgfy.onrender.com"
 )
 
 $ErrorActionPreference = "Stop"

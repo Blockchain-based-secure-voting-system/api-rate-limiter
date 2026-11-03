@@ -69,11 +69,11 @@ class SessionManager @Inject constructor(
     }
 
     val resolvedHost: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[GATEWAY_RESOLVED_HOST] ?: "https://api-rate-limiter-gateway-n0ab.onrender.com"
+        prefs[GATEWAY_RESOLVED_HOST] ?: "https://api-rate-limiter-gateway-qgfy.onrender.com"
     }
 
     val gatewayHost: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[GATEWAY_RESOLVED_HOST] ?: prefs[GATEWAY_HOST] ?: "https://api-rate-limiter-gateway-n0ab.onrender.com"
+        prefs[GATEWAY_RESOLVED_HOST] ?: prefs[GATEWAY_HOST] ?: "https://api-rate-limiter-gateway-qgfy.onrender.com"
     }
 
     suspend fun saveGatewayHost(host: String) {

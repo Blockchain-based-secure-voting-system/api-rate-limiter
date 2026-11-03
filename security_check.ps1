@@ -12,7 +12,7 @@
    - No secret or token is ever printed. Results are also saved to security_report.csv.
 #>
 param(
-  [string]$Base = "https://api-rate-limiter-gateway-n0ab.onrender.com",
+  [string]$Base = "https://api-rate-limiter-gateway-qgfy.onrender.com",
   [string]$OldSecret = "",
   [string]$AdminToken = "",
   [string]$BurstPath = "/api/polylance/escrows",
